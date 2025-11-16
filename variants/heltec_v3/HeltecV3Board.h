@@ -15,6 +15,7 @@
 #define  PIN_ADC_CTRL_INACTIVE  HIGH
 
 #include <driver/rtc_io.h>
+#include <WiFi.h>
 
 class HeltecV3Board : public ESP32Board {
 private:
@@ -88,7 +89,9 @@ public:
   }
 
   void sleep() override {
-    enterLightSleep(1800); // To wake up every 30 minutes or when receiving a LoRa packet
+    if (WiFi.getMode() == WIFI_MODE_NULL) { // WiFi is off ~ No active OTA, can go to sleep
+      enterLightSleep(1800); // To wake up every 30 minutes or when receiving a LoRa packet
+    }
   }
 
   uint16_t getBattMilliVolts() override {
