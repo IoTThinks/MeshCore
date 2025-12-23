@@ -8,8 +8,10 @@
 #include <rom/rtc.h>
 #include <sys/time.h>
 #include <Wire.h>
+#if defined(CONFIG_IDF_TARGET_ESP32S3)
 #include <WiFi.h>
 #include "driver/rtc_io.h"
+#endif
 
 class ESP32Board : public mesh::MainBoard {
 protected:
@@ -49,25 +51,30 @@ public:
     return temperatureRead();
   }
 
-  void enterLightSleep(uint32_t secs) {
-#if defined(CONFIG_IDF_TARGET_ESP32S3) // Supported ESP32 variants
-    if (rtc_gpio_is_valid_gpio((gpio_num_t)P_LORA_DIO_1)) { // Only enter sleep mode if P_LORA_DIO_1 is RTC pin
-      esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
-      esp_sleep_enable_ext1_wakeup((1L << P_LORA_DIO_1), ESP_EXT1_WAKEUP_ANY_HIGH); // To wake up when receiving a LoRa packet
-
-      if (secs > 0) {
-        esp_sleep_enable_timer_wakeup(secs * 1000000); // To wake up every hour to do periodically jobs
-      }
-
-      esp_light_sleep_start(); // CPU enters light sleep
-    }
-#endif
-  }
-
+  // Enter light sleep mode to reduce power consumption (~9mA vs ~50mA).
+  // Wakes on: (1) LoRa packet received (DIO1 interrupt), or (2) timer after 'secs' seconds.
+  // Only supported on ESP32-S3 with RTC-capable DIO1 pin.
   void sleep(uint32_t secs) override {
-    if (WiFi.getMode() == WIFI_MODE_NULL) { // WiFi is off ~ No active OTA, safe to go to sleep
-      enterLightSleep(secs);                // To wake up after "secs" seconds or when receiving a LoRa packet
+#if defined(CONFIG_IDF_TARGET_ESP32S3)
+    // Only sleep if DIO1 is an RTC-capable GPIO
+    if (!rtc_gpio_is_valid_gpio((gpio_num_t)P_LORA_DIO_1)) return;
+
+    // Don't sleep if WiFi is active (e.g., during OTA update)
+    if (WiFi.getMode() != WIFI_MODE_NULL) return;
+
+    // Keep RTC peripherals powered to maintain GPIO wakeup capability
+    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
+
+    // Wake when LoRa module signals packet received (DIO1 goes high)
+    esp_sleep_enable_ext1_wakeup((1L << P_LORA_DIO_1), ESP_EXT1_WAKEUP_ANY_HIGH);
+
+    // Also wake after timeout to handle periodic tasks
+    if (secs > 0) {
+      esp_sleep_enable_timer_wakeup(secs * 1000000);
     }
+
+    esp_light_sleep_start();
+#endif
   }
 
   uint8_t getStartupReason() const override { return startup_reason; }
