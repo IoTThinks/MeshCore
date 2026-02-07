@@ -71,7 +71,7 @@ public:
     wifi_mode_t mode;
     esp_err_t err = esp_wifi_get_mode(&mode);
 
-    if (err == ESP_OK) { // WiFi is on
+    if (err == ESP_OK && mode != WIFI_MODE_NULL) { // WiFi is active
       return false;
     }
 

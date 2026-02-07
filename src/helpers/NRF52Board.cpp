@@ -344,15 +344,25 @@ void NRF52Board::sleep(uint32_t secs) {
     return;
   }
 
-  // Configure GPIO wakeup
+  // Clear FPU interrupt flags to avoid insomnia (errata 87)
+  // https://docs.nordicsemi.com/bundle/errata_nRF52840_Rev3/page/ERR/nRF52840/Rev3/latest/anomaly_840_87.html
+  #if (__FPU_USED == 1)
+  __set_FPSCR(__get_FPSCR() & ~(0x0000009F));
+  (void) __get_FPSCR();
+  NVIC_ClearPendingIRQ(FPU_IRQn);
+  #endif
+
+  // RadioLib's attachInterrupt() has already configured a GPIOTE channel on the
+  // DIO1 pin (rising edge). GPIOTE NVIC interrupts wake WFE even with PRIMASK=1,
+  // so no additional GPIO sense configuration is needed for System ON idle.
+  // Avoid writing PIN_CNF (nrf_gpio_cfg_sense_input) on the DIO1 pin — it risks
+  // a rare GPIOTE sampling glitch that can cause the ISR to miss a rising edge,
+  // leaving DIO1 stuck HIGH with STATE_INT_READY never set (radio deaf).
   uint32_t wakeupPin = getIRQGpio();
 
   // Mark the start of the sleep
   uint32_t startTime = millis();
   uint32_t timeoutMs = secs * 1000;
-
-  // Create event when wakeup pin is high
-  nrf_gpio_cfg_sense_input(wakeupPin, NRF_GPIO_PIN_NOPULL, NRF_GPIO_PIN_SENSE_HIGH);
 
   while (true) {
     // Do housekeeping tasks for peripherals (UART...) so they do not block sleep
@@ -385,11 +395,5 @@ void NRF52Board::sleep(uint32_t secs) {
     // Enable ISR servicing
     interrupts();
   }
-
-  // Disable sense on wakeup pin
-  nrf_gpio_cfg_input(wakeupPin, NRF_GPIO_PIN_NOPULL);
-
-  // Clear the latch so the next sleep is fresh and do not remember old events.
-  NRF_GPIO->LATCH = (1 << wakeupPin);
 }
 #endif
