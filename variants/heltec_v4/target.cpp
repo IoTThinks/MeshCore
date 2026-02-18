@@ -24,7 +24,7 @@ AutoDiscoverRTCClock rtc_clock(fallback_clock);
 #endif
 
 #ifdef DISPLAY_CLASS
-  DISPLAY_CLASS display(NULL);
+  DISPLAY_CLASS display(NULL);  // OLED is on VDD_3V3, not VEXT
   MomentaryButton user_btn(PIN_USER_BTN, 1000, true);
 #endif
 

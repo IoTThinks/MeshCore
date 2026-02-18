@@ -18,17 +18,31 @@ bool SSD1306Display::begin() {
 }
 
 void SSD1306Display::turnOn() {
-  display.ssd1306_command(SSD1306_DISPLAYON);
   if (!_isOn) {
-    if (_peripher_power) _peripher_power->claim();
-    _isOn = true;
+    if (_peripher_power) {
+      _peripher_power->claim();
+#if defined(PIN_BOARD_SDA) && defined(PIN_BOARD_SCL)
+      Wire.begin(PIN_BOARD_SDA, PIN_BOARD_SCL);
+#else
+      Wire.begin();
+#endif
+    }
+    _isOn = true;  // set before begin() to prevent double claim
+    if (_peripher_power) begin();  // re-init display after power was cut
   }
+  display.ssd1306_command(SSD1306_DISPLAYON);
 }
 
 void SSD1306Display::turnOff() {
   display.ssd1306_command(SSD1306_DISPLAYOFF);
   if (_isOn) {
-    if (_peripher_power) _peripher_power->release();
+    if (_peripher_power) {
+      Wire.end();  // release I2C pins before power cut to prevent parasitic current
+#if PIN_OLED_RESET >= 0
+      digitalWrite(PIN_OLED_RESET, LOW);
+#endif
+      _peripher_power->release();
+    }
     _isOn = false;
   }
 }
