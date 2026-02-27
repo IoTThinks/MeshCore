@@ -26,6 +26,7 @@ void setFlag(void) {
 
 void RadioLibWrapper::begin() {
   _radio->setPacketReceivedAction(setFlag);  // this is also SentComplete interrupt
+  _board->on_sleep_wake_isr = setFlag;       // for light sleep wake (edge lost by gpio_wakeup_enable)
   state = STATE_IDLE;
 
   if (_board->getStartupReason() == BD_STARTUP_RX_PACKET) {  // received a LoRa packet (while in deep sleep)

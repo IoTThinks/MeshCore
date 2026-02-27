@@ -52,6 +52,13 @@ public:
   virtual void reboot() = 0;
   virtual void powerOff() { /* no op */ }
   virtual uint32_t getIRQGpio() { return -1; } // not supported. Returns DIO1 (SX1262) and DIO0 (SX127x)
+
+  // Callback registered by radio driver (e.g. RadioLibWrapper::setFlag).
+  // Board's sleep() calls this after light sleep wake when a packet is pending,
+  // because gpio_wakeup_enable() overwrites the GPIO interrupt type, causing
+  // RadioLib's rising-edge ISR to miss the packet that triggered the wake.
+  void (*on_sleep_wake_isr)() = nullptr;
+
   virtual void sleep(uint32_t secs)  { /* no op */ }
   virtual uint32_t getGpio() { return 0; }
   virtual void setGpio(uint32_t values) {}

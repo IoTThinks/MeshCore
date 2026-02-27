@@ -95,19 +95,31 @@ public:
 
     // Skip sleep if there is a LoRa packet
     if (digitalRead(wakeupPin) == HIGH) {
+      gpio_wakeup_disable(wakeupPin);
+      gpio_set_intr_type(wakeupPin, GPIO_INTR_POSEDGE);
       interrupts();
+      if (on_sleep_wake_isr) on_sleep_wake_isr();
       return;
     }
 
     // MCU enters light sleep
     esp_light_sleep_start();
 
-    // Avoid ISR flood during wakeup due to HIGH LEVEL interrupt
+    // gpio_wakeup_enable() overwrites the GPIO int_type register to HIGH_LEVEL,
+    // which replaces RadioLib's POSEDGE config. Restore POSEDGE before enabling
+    // interrupts to prevent continuous ISR firing while DIO is still HIGH.
     gpio_wakeup_disable(wakeupPin);
     gpio_set_intr_type(wakeupPin, GPIO_INTR_POSEDGE);
 
     // Enable CPU interrupt servicing
     interrupts();
+
+    // If DIO is HIGH, a packet arrived during sleep. The rising edge that
+    // RadioLib's ISR needs was lost (it occurred while int_type was HIGH_LEVEL).
+    // Manually notify the radio driver so recvRaw() will read the packet.
+    if (digitalRead(wakeupPin) == HIGH && on_sleep_wake_isr) {
+      on_sleep_wake_isr();
+    }
   }
 
   uint8_t getStartupReason() const override { return startup_reason; }
