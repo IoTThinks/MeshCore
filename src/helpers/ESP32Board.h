@@ -81,9 +81,11 @@ public:
 #endif
 
     // Configure GPIO wakeup
-    gpio_num_t wakeupPin = (gpio_num_t)getIRQGpio();
+    uint32_t irq = getIRQGpio();
+    if (irq == (uint32_t)-1) return;  // no IRQ pin configured, can't sleep safely
+    gpio_num_t wakeupPin = (gpio_num_t)irq;
     esp_sleep_enable_gpio_wakeup();
-    gpio_wakeup_enable((gpio_num_t)wakeupPin, GPIO_INTR_HIGH_LEVEL); // Wake up when receiving a LoRa packet
+    gpio_wakeup_enable(wakeupPin, GPIO_INTR_HIGH_LEVEL); // Wake up when receiving a LoRa packet
 
     // Configure timer wakeup
     if (secs > 0) {
