@@ -57,6 +57,7 @@ public:
   virtual void setGpio(uint32_t values) {}
   virtual uint8_t getStartupReason() const = 0;
   virtual bool startOTAUpdate(const char* id, char reply[]) { return false; }   // not supported
+  virtual bool hasPendingRadioIRQ() { return false; }
 
   // Power management interface (boards with power management override these)
   virtual bool isExternalPowered() { return false; }

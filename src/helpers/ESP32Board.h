@@ -8,13 +8,15 @@
 #include <rom/rtc.h>
 #include <sys/time.h>
 #include <Wire.h>
-#include "soc/rtc.h"
+#include "driver/rtc_io.h"
+#include "driver/gpio.h"
 #include "esp_system.h"
 
 class ESP32Board : public mesh::MainBoard {
 protected:
   uint8_t startup_reason;
   bool inhibit_sleep = false;
+  volatile bool _pending_radio_irq = false;
 
 public:
   void begin() {
@@ -61,6 +63,12 @@ public:
     return P_LORA_DIO_1; // default for SX1262
   }
 
+  bool hasPendingRadioIRQ() override {
+    bool pending = _pending_radio_irq;
+    _pending_radio_irq = false;
+    return pending;
+  }
+
   void sleep(uint32_t secs) override {
     // Skip if not allow to sleep
     if (inhibit_sleep) {
@@ -68,47 +76,58 @@ public:
       return;
     }
 
-    // Use more accurate clock in sleep
-#if SOC_RTC_SLOW_CLK_SUPPORT_RC_FAST_D256
-    if (rtc_clk_slow_src_get() != SOC_RTC_SLOW_CLK_SRC_RC_FAST) {
-
-      // Switch slow clock source to RC_FAST / 256 (~31.25 kHz)
-      rtc_clk_slow_src_set(SOC_RTC_SLOW_CLK_SRC_RC_FAST);
-
-      // Calibrate slow clock
-      esp_clk_slow_boot_cal(1024);
-    }
-#endif
-
-    // Configure GPIO wakeup
     uint32_t irq = getIRQGpio();
     if (irq == (uint32_t)-1) return;  // no IRQ pin configured, can't sleep safely
     gpio_num_t wakeupPin = (gpio_num_t)irq;
-    esp_sleep_enable_gpio_wakeup();
-    gpio_wakeup_enable(wakeupPin, GPIO_INTR_HIGH_LEVEL); // Wake up when receiving a LoRa packet
 
     // Configure timer wakeup
     if (secs > 0) {
-      esp_sleep_enable_timer_wakeup(secs * 1000000ULL); // Wake up periodically to do scheduled jobs
+      esp_sleep_enable_timer_wakeup(secs * 1000000ULL);
     }
 
-    // Disable CPU interrupt servicing
+#if SOC_PM_SUPPORT_EXT1_WAKEUP
+    if (rtc_gpio_is_valid_gpio(wakeupPin)) {
+      // ext1 wakeup — does not interfere with GPIO edge interrupts,
+      // so RadioLib's ISR fires normally on wake.
+      esp_sleep_enable_ext1_wakeup(1ULL << wakeupPin, ESP_EXT1_WAKEUP_ANY_HIGH);
+
+      noInterrupts();
+
+      // Skip sleep if there is a LoRa packet already pending
+      if (digitalRead(wakeupPin) == HIGH) {
+        interrupts();
+        return;
+      }
+
+      esp_light_sleep_start();
+      interrupts();
+      return;
+    }
+#endif
+
+    // Fallback: gpio_wakeup for SoCs without ext1 (ESP32-C3/C6) or non-RTC pins
+    esp_sleep_enable_gpio_wakeup();
+    gpio_wakeup_enable(wakeupPin, GPIO_INTR_HIGH_LEVEL);
+
     noInterrupts();
 
-    // Skip sleep if there is a LoRa packet
     if (digitalRead(wakeupPin) == HIGH) {
+      gpio_wakeup_disable(wakeupPin);
       interrupts();
       return;
     }
 
-    // MCU enters light sleep
     esp_light_sleep_start();
 
-    // Avoid ISR flood during wakeup due to HIGH LEVEL interrupt
+    // Restore edge interrupt for RadioLib ISR
     gpio_wakeup_disable(wakeupPin);
     gpio_set_intr_type(wakeupPin, GPIO_INTR_POSEDGE);
 
-    // Enable CPU interrupt servicing
+    // Signal radio layer — the ISR may not fire for a packet received during sleep
+    if (digitalRead(wakeupPin) == HIGH) {
+      _pending_radio_irq = true;
+    }
+
     interrupts();
   }
 
