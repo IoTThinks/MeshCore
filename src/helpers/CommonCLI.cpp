@@ -65,7 +65,8 @@ void CommonCLI::loadPrefsInt(FILESYSTEM* fs, const char* filename) {
     file.read((uint8_t *)&_prefs->multi_acks, sizeof(_prefs->multi_acks));                         // 115
     file.read((uint8_t *)&_prefs->bw, sizeof(_prefs->bw));                                         // 116
     file.read((uint8_t *)&_prefs->agc_reset_interval, sizeof(_prefs->agc_reset_interval));         // 120
-    file.read(pad, 3);                                                                             // 121
+    file.read((uint8_t *)&_prefs->path_hash_mode, sizeof(_prefs->path_hash_mode));                 // 121
+    file.read(pad, 2);                                                                             // 122
     file.read((uint8_t *)&_prefs->flood_max, sizeof(_prefs->flood_max));                           // 124
     file.read((uint8_t *)&_prefs->flood_advert_interval, sizeof(_prefs->flood_advert_interval));   // 125
     file.read((uint8_t *)&_prefs->interference_threshold, sizeof(_prefs->interference_threshold)); // 126
@@ -97,6 +98,7 @@ void CommonCLI::loadPrefsInt(FILESYSTEM* fs, const char* filename) {
     _prefs->tx_power_dbm = constrain(_prefs->tx_power_dbm, -9, 30);
     _prefs->multi_acks = constrain(_prefs->multi_acks, 0, 1);
     _prefs->adc_multiplier = constrain(_prefs->adc_multiplier, 0.0f, 10.0f);
+    _prefs->path_hash_mode = constrain(_prefs->path_hash_mode, 0, 2);   // NOTE: mode 3 reserved for future
 
     // sanitise bad bridge pref values
     _prefs->bridge_enabled = constrain(_prefs->bridge_enabled, 0, 1);
@@ -149,7 +151,8 @@ void CommonCLI::savePrefs(FILESYSTEM* fs) {
     file.write((uint8_t *)&_prefs->multi_acks, sizeof(_prefs->multi_acks));                         // 115
     file.write((uint8_t *)&_prefs->bw, sizeof(_prefs->bw));                                         // 116
     file.write((uint8_t *)&_prefs->agc_reset_interval, sizeof(_prefs->agc_reset_interval));         // 120
-    file.write(pad, 3);                                                                             // 121
+    file.write((uint8_t *)&_prefs->path_hash_mode, sizeof(_prefs->path_hash_mode));                 // 121
+    file.write(pad, 2);                                                                             // 122
     file.write((uint8_t *)&_prefs->flood_max, sizeof(_prefs->flood_max));                           // 124
     file.write((uint8_t *)&_prefs->flood_advert_interval, sizeof(_prefs->flood_advert_interval));   // 125
     file.write((uint8_t *)&_prefs->interference_threshold, sizeof(_prefs->interference_threshold)); // 126
@@ -327,6 +330,8 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, ch
           sp++;
         }
         *reply = 0;  // set null terminator
+      } else if (memcmp(config, "path.hash.mode", 14) == 0) {
+        sprintf(reply, "> %d", (uint32_t)_prefs->path_hash_mode);
       } else if (memcmp(config, "tx", 2) == 0 && (config[2] == 0 || config[2] == ' ')) {
         sprintf(reply, "> %d", (int32_t) _prefs->tx_power_dbm);
       } else if (memcmp(config, "freq", 4) == 0) {
@@ -364,6 +369,17 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, ch
       } else if (memcmp(config, "bridge.secret", 13) == 0) {
         sprintf(reply, "> %s", _prefs->bridge_secret);
 #endif
+      } else if (memcmp(config, "bootloader.ver", 14) == 0) {
+      #ifdef NRF52_PLATFORM
+          char ver[32];
+          if (_board->getBootloaderVersion(ver, sizeof(ver))) {
+              sprintf(reply, "> %s", ver);
+          } else {
+              strcpy(reply, "> unknown");
+          }
+      #else
+          strcpy(reply, "ERROR: unsupported");
+      #endif
       } else if (memcmp(config, "adc.multiplier", 14) == 0) {
         float adc_mult = _board->getAdcMultiplier();
         if (adc_mult == 0.0f) {
@@ -547,6 +563,16 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, ch
         *dp = 0;
         savePrefs();
         strcpy(reply, "OK");
+      } else if (memcmp(config, "path.hash.mode ", 15) == 0) {
+        config += 15;
+        uint8_t mode = atoi(config);
+        if (mode < 3) {
+          _prefs->path_hash_mode = mode;
+          savePrefs();
+          strcpy(reply, "OK");
+        } else {
+          strcpy(reply, "Error, must be 0,1, or 2");
+        }
       } else if (memcmp(config, "tx ", 3) == 0) {
         _prefs->tx_power_dbm = atoi(&config[3]);
         savePrefs();
@@ -693,6 +719,9 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, ch
       LocationProvider * l = _sensors->getLocationProvider();
       if (l != NULL) {
         l->syncTime();
+        strcpy(reply, "ok");
+      } else {
+        strcpy(reply, "gps provider not found");
       }
     } else if (memcmp(command, "gps setloc", 10) == 0) {
       _prefs->node_lat = _sensors->node_lat;
@@ -722,7 +751,7 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, ch
         _prefs->advert_loc_policy = ADVERT_LOC_SHARE;
         savePrefs();
         strcpy(reply, "ok");
-      } else if (memcmp(command+11, "prefs", 4) == 0) {
+      } else if (memcmp(command+11, "prefs", 5) == 0) {
         _prefs->advert_loc_policy = ADVERT_LOC_PREFS;
         savePrefs();
         strcpy(reply, "ok");
@@ -773,27 +802,28 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, ch
         strcpy(reply, "Off");
       }
     } else if (memcmp(command, "sensor", 6) == 0) {
+      int len = 0;
       // I2C
 #if defined(ENV_PIN_SDA) && defined(ENV_PIN_SCL)
-      sprintf(reply, "I2C Wire1: SDA=%s,SCL=%s\r\n", STR(ENV_PIN_SDA), STR(ENV_PIN_SCL));
+      len = snprintf(reply, 160, "I2C Wire1: SDA=%s,SCL=%s\r\n", STR(ENV_PIN_SDA), STR(ENV_PIN_SCL));
 #elif defined(PIN_BOARD_SDA) && defined(PIN_BOARD_SCL)
-      sprintf(reply, "I2C Wire: SDA=%s, SCL=%s\r\n", STR(PIN_BOARD_SDA), STR(PIN_BOARD_SCL));
+      len = snprintf(reply, 160, "I2C Wire: SDA=%s, SCL=%s\r\n", STR(PIN_BOARD_SDA), STR(PIN_BOARD_SCL));
 #elif defined(PIN_WIRE_SDA) && defined(PIN_WIRE_SCL)
-      sprintf(reply, "I2C Wire: SDA=%s, SCL=%s\r\n", STR(PIN_WIRE_SDA), STR(PIN_WIRE_SCL));
+      len = snprintf(reply, 160, "I2C Wire: SDA=%s, SCL=%s\r\n", STR(PIN_WIRE_SDA), STR(PIN_WIRE_SCL));
 #else
-      sprintf(reply, "I2C GPIOs not defined\r\n");
+      len = snprintf(reply, 160, "I2C GPIOs not defined\r\n");
 #endif
 
       // GPS
 #if defined(PIN_GPS_RX) && defined(PIN_GPS_TX)
-      sprintf(reply + strlen(reply), "GPS Serial: RX=%s, TX=%s", STR(PIN_GPS_RX), STR(PIN_GPS_TX));
-      #ifdef ENV_INCLUDE_GPS> 0
-            sprintf(reply + strlen(reply), ". Configured");
+      len += snprintf(reply + len, 160 - len, "GPS Serial: RX=%s, TX=%s", STR(PIN_GPS_RX), STR(PIN_GPS_TX));
+      #if defined(ENV_INCLUDE_GPS) && ENV_INCLUDE_GPS > 0
+            len += snprintf(reply + len, 160 - len, ". Configured");
       #else
-            sprintf(reply + strlen(reply), ". Not configured");
+            len += snprintf(reply + len, 160 - len, ". Not configured");
       #endif
 #else
-      sprintf(reply + strlen(reply), "GPS Serial not defined");
+      snprintf(reply + len, 160 - len, "GPS Serial not defined");
 #endif
     } else if (memcmp(command, "log start", 9) == 0) {
       _callbacks->setLoggingOn(true);

@@ -20,7 +20,7 @@ public:
       digitalWrite(_pin, _active);
     }
   }
-  
+
   void release() {
     if (_claims == 0) return; // avoid negative _claims
 
