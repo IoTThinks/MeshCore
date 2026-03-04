@@ -55,20 +55,7 @@
 #endif
 
 #if defined(TBEAM_SX1262) || defined(TBEAM_SX1276)
-  // LoRa radio module pins for TBeam
-  // uint32_t  P_LORA_BUSY  = 0;   //shared, so define at run
-  // uint32_t  P_LORA_DIO_2 = 0;   //SX1276 only, so define at run
-
-  // #define  P_LORA_DIO_0  26
-  // #define  P_LORA_DIO_1  33
-  // #define  P_LORA_NSS    18
-  // #define  P_LORA_RESET  23
-  // #define  P_LORA_SCLK    5
-  // #define  P_LORA_MISO   19
-  // #define  P_LORA_MOSI   27
-
-  // #define PIN_GPS_RX      34
-  // #define PIN_GPS_TX      12
+  // LoRa and GPS pins defined in platformio.ini per variant
 
   #define PIN_PMU_IRQ   35
   #define PMU_WIRE_PORT  Wire

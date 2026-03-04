@@ -773,27 +773,28 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, ch
         strcpy(reply, "Off");
       }
     } else if (memcmp(command, "sensor", 6) == 0) {
+      int len = 0;
       // I2C
 #if defined(ENV_PIN_SDA) && defined(ENV_PIN_SCL)
-      sprintf(reply, "I2C Wire1: SDA=%s,SCL=%s\r\n", STR(ENV_PIN_SDA), STR(ENV_PIN_SCL));
+      len = snprintf(reply, 160, "I2C Wire1: SDA=%s,SCL=%s\r\n", STR(ENV_PIN_SDA), STR(ENV_PIN_SCL));
 #elif defined(PIN_BOARD_SDA) && defined(PIN_BOARD_SCL)
-      sprintf(reply, "I2C Wire: SDA=%s, SCL=%s\r\n", STR(PIN_BOARD_SDA), STR(PIN_BOARD_SCL));
+      len = snprintf(reply, 160, "I2C Wire: SDA=%s, SCL=%s\r\n", STR(PIN_BOARD_SDA), STR(PIN_BOARD_SCL));
 #elif defined(PIN_WIRE_SDA) && defined(PIN_WIRE_SCL)
-      sprintf(reply, "I2C Wire: SDA=%s, SCL=%s\r\n", STR(PIN_WIRE_SDA), STR(PIN_WIRE_SCL));
+      len = snprintf(reply, 160, "I2C Wire: SDA=%s, SCL=%s\r\n", STR(PIN_WIRE_SDA), STR(PIN_WIRE_SCL));
 #else
-      sprintf(reply, "I2C GPIOs not defined\r\n");
+      len = snprintf(reply, 160, "I2C GPIOs not defined\r\n");
 #endif
 
       // GPS
 #if defined(PIN_GPS_RX) && defined(PIN_GPS_TX)
-      sprintf(reply + strlen(reply), "GPS Serial: RX=%s, TX=%s", STR(PIN_GPS_RX), STR(PIN_GPS_TX));
-      #ifdef ENV_INCLUDE_GPS> 0
-            sprintf(reply + strlen(reply), ". Configured");
+      len += snprintf(reply + len, 160 - len, "GPS Serial: RX=%s, TX=%s", STR(PIN_GPS_RX), STR(PIN_GPS_TX));
+      #if defined(ENV_INCLUDE_GPS) && ENV_INCLUDE_GPS > 0
+            len += snprintf(reply + len, 160 - len, ". Configured");
       #else
-            sprintf(reply + strlen(reply), ". Not configured");
+            len += snprintf(reply + len, 160 - len, ". Not configured");
       #endif
 #else
-      sprintf(reply + strlen(reply), "GPS Serial not defined");
+      snprintf(reply + len, 160 - len, "GPS Serial not defined");
 #endif
     } else if (memcmp(command, "log start", 9) == 0) {
       _callbacks->setLoggingOn(true);
