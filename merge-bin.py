@@ -8,7 +8,7 @@ Import("env", "projenv")
 
 board_config = env.BoardConfig()
 firmware_bin = "${BUILD_DIR}/${PROGNAME}.bin"
-merged_bin = os.environ.get("MERGED_BIN_PATH", "${BUILD_DIR}/${PROGNAME}-merged.bin")
+merged_bin = os.environ.get("MERGED_BIN_PATH", "${BUILD_DIR}/${PROGNAME}-cleanInstall.bin")
 
 
 def merge_bin_action(source, target, env):

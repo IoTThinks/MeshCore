@@ -134,7 +134,8 @@ build_firmware() {
 
   # set firmware version string
   # e.g: v1.0.0-abcdef
-  FIRMWARE_VERSION_STRING="${FIRMWARE_VERSION}-${COMMIT_HASH}"
+  # FIRMWARE_VERSION_STRING="${FIRMWARE_VERSION}-${COMMIT_HASH}"
+  FIRMWARE_VERSION_STRING="${FIRMWARE_VERSION}"
 
   # craft filename
   # e.g: RAK_4631_Repeater-v1.0.0-SHA
@@ -153,7 +154,7 @@ build_firmware() {
   if [ "$ENV_PLATFORM" == "ESP32_PLATFORM" ]; then
     pio run -t mergebin -e $1
     cp .pio/build/$1/firmware.bin out/${FIRMWARE_FILENAME}.bin 2>/dev/null || true
-    cp .pio/build/$1/firmware-merged.bin out/${FIRMWARE_FILENAME}-merged.bin 2>/dev/null || true
+    cp .pio/build/$1/firmware-cleanInstall.bin out/${FIRMWARE_FILENAME}-cleanInstall.bin 2>/dev/null || true
   fi
 
   # build .uf2 for nrf52 boards, copy .uf2 and .zip to out folder (e.g: RAK_4631_Repeater-v1.0.0-SHA.uf2)
