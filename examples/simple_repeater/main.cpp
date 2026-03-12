@@ -22,6 +22,11 @@ static char command[160];
 // For power saving
 unsigned long POWERSAVING_FIRSTSLEEP_SECS = 120; // The first sleep (if enabled) from boot
 
+#if defined(PIN_USER_BTN) && defined(_SEEED_SENSECAP_SOLAR_H_)
+static unsigned long userBtnDownAt = 0;
+#define USER_BTN_HOLD_OFF_MILLIS 1500
+#endif
+
 void setup() {
   Serial.begin(115200);
   delay(1000);
@@ -122,6 +127,21 @@ void loop() {
 
     command[0] = 0;  // reset command buffer
   }
+
+#if defined(PIN_USER_BTN) && defined(_SEEED_SENSECAP_SOLAR_H_)
+  // Hold the user button to power off the SenseCAP Solar repeater.
+  int btnState = digitalRead(PIN_USER_BTN);
+  if (btnState == LOW) {
+    if (userBtnDownAt == 0) {
+      userBtnDownAt = millis();
+    } else if ((unsigned long)(millis() - userBtnDownAt) >= USER_BTN_HOLD_OFF_MILLIS) {
+      Serial.println("Powering off...");
+      board.powerOff();  // does not return
+    }
+  } else {
+    userBtnDownAt = 0;
+  }
+#endif
 
   the_mesh.loop();
   sensors.loop();
