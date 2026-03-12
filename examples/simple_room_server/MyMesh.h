@@ -205,4 +205,7 @@ public:
   void clearStats() override;
   void handleCommand(uint32_t sender_timestamp, char* command, char* reply);
   void loop();
+
+  // To check if there is pending work
+  bool hasPendingWork() const;
 };

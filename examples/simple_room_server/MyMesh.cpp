@@ -901,3 +901,11 @@ void MyMesh::loop() {
   uptime_millis += now - last_millis;
   last_millis = now;
 }
+
+// To check if there is pending work
+bool MyMesh::hasPendingWork() const {
+#if defined(WITH_BRIDGE)
+  if (bridge.isRunning()) return true;  // bridge needs WiFi radio, can't sleep
+#endif
+  return _mgr->getOutboundTotal() > 0;
+}
