@@ -1,6 +1,7 @@
 # sh ./build-repeaters-iotthinks.sh
 export FIRMWARE_VERSION="PowerSaving14"
 
+############# Repeaters #############
 # Commonly-used boards
 ## ESP32 - 6 boards
 sh build.sh build-firmware \
@@ -40,3 +41,18 @@ Xiao_C3_repeater \
 Xiao_C6_repeater_ \
 RAK_3401_repeater \
 Heltec_E290_repeater_
+
+############# Room Server #############
+sh build.sh build-firmware \
+Heltec_v3_room_server \
+heltec_v4_room_server \
+RAK_4631_room_server \
+Heltec_t114_room_server \
+Xiao_nrf52_room_server
+
+############# Companions #############
+sh build.sh build-firmware \
+RAK_4631_companion_radio_ble \
+Heltec_t114_companion_radio_ble \
+Xiao_nrf52_companion_radio_ble
+
