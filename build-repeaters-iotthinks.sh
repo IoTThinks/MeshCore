@@ -48,11 +48,13 @@ Heltec_v3_room_server \
 heltec_v4_room_server \
 RAK_4631_room_server \
 Heltec_t114_room_server \
-Xiao_nrf52_room_server
+Xiao_nrf52_room_server \
+t1000e_room_server
 
 ############# Companions #############
 sh build.sh build-firmware \
 RAK_4631_companion_radio_ble \
 Heltec_t114_companion_radio_ble \
-Xiao_nrf52_companion_radio_ble
+Xiao_nrf52_companion_radio_ble \
+t1000e_companion_radio_ble
 
