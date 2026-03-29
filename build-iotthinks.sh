@@ -43,7 +43,7 @@ Xiao_S3_WIO_repeater \
 Xiao_C3_repeater \
 Xiao_C6_repeater_ \
 RAK_3401_repeater \
-Heltec_E290_repeater_
+Heltec_E290_repeater
 
 ############# Room Server #############
 sh build.sh build-firmware \
