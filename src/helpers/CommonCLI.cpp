@@ -913,6 +913,12 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, ch
 #else
       sprintf(reply + strlen(reply), "GPS Serial not defined");
 #endif
+    } else if (memcmp(command, "powerlog", 8) == 0) {
+      sprintf(reply, "Last reset reason: %s", _board->getResetReasonString(_board->getResetReason()));
+#if defined(NRF52_PLATFORM)
+      sprintf(reply + strlen(reply), "\r\nLast shutdown reason: %s", _board->getShutdownReasonString(_board->getShutdownReason()));
+      sprintf(reply + strlen(reply), "\r\nLast boot voltage: %u mV", _board->getBootVoltage());
+#endif
     } else if (memcmp(command, "log start", 9) == 0) {
       _callbacks->setLoggingOn(true);
       strcpy(reply, "   logging on");
