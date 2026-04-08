@@ -15,11 +15,12 @@ class ESP32Board : public mesh::MainBoard {
 protected:
   uint8_t startup_reason;
   bool inhibit_sleep = false;
+  static inline portMUX_TYPE sleepMux = portMUX_INITIALIZER_UNLOCKED;
 
 public:
   void begin() {
     // for future use, sub-classes SHOULD call this from their begin()
-    startup_reason = BD_STARTUP_NORMAL;
+    startup_reason = BD_STARTUP_NORMAL;    
 
   #ifdef ESP32_CPU_FREQ
     setCpuFrequencyMhz(ESP32_CPU_FREQ);
@@ -42,7 +43,7 @@ public:
    #endif
   #else
     Wire.begin();
-  #endif
+  #endif    
   }
 
   // Temperature from ESP32 MCU
@@ -80,10 +81,8 @@ public:
     }
 #endif
 
-    // Configure GPIO wakeup
-    gpio_num_t wakeupPin = (gpio_num_t)getIRQGpio();
-    esp_sleep_enable_gpio_wakeup();
-    gpio_wakeup_enable((gpio_num_t)wakeupPin, GPIO_INTR_HIGH_LEVEL); // Wake up when receiving a LoRa packet
+    // Set GPIO wakeup
+    gpio_num_t wakeupPin = (gpio_num_t)getIRQGpio();    
 
     // Configure timer wakeup
     if (secs > 0) {
@@ -91,13 +90,18 @@ public:
     }
 
     // Disable CPU interrupt servicing
-    noInterrupts();
+    portENTER_CRITICAL(&sleepMux);
 
     // Skip sleep if there is a LoRa packet
-    if (digitalRead(wakeupPin) == HIGH) {
-      interrupts();
+    if (gpio_get_level(wakeupPin) == HIGH) {
+      portEXIT_CRITICAL(&sleepMux);
+      delay(1);
       return;
     }
+
+    // Configure GPIO wakeup
+    esp_sleep_enable_gpio_wakeup();
+    gpio_wakeup_enable((gpio_num_t)wakeupPin, GPIO_INTR_HIGH_LEVEL); // Wake up when receiving a LoRa packet
 
     // MCU enters light sleep
     esp_light_sleep_start();
@@ -107,7 +111,7 @@ public:
     gpio_set_intr_type(wakeupPin, GPIO_INTR_POSEDGE);
 
     // Enable CPU interrupt servicing
-    interrupts();
+    portEXIT_CRITICAL(&sleepMux);
   }
 
   uint8_t getStartupReason() const override { return startup_reason; }
@@ -131,7 +135,7 @@ public:
 #endif
 
   uint16_t getBattMilliVolts() override {
-  #ifdef PIN_VBAT_READ
+    #ifdef PIN_VBAT_READ
     analogReadResolution(12);
 
     uint32_t raw = 0;
@@ -170,16 +174,16 @@ public:
       // start with some date/time in the recent past
       struct timeval tv;
       tv.tv_sec = 1715770351;  // 15 May 2024, 8:50pm
-      tv.tv_usec = 0;
-      settimeofday(&tv, NULL);
-    }
+    tv.tv_usec = 0;
+    settimeofday(&tv, NULL);
+  }
   }
   uint32_t getCurrentTime() override {
     time_t _now;
     time(&_now);
     return _now;
   }
-  void setCurrentTime(uint32_t time) override { 
+  void setCurrentTime(uint32_t time) override {
     struct timeval tv;
     tv.tv_sec = time;
     tv.tv_usec = 0;
