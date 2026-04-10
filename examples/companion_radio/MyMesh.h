@@ -174,10 +174,10 @@ public:
       sensors.setSettingValue("gps_interval", interval_str);
     }
   }
+#endif
 
   // To check if there is pending work
   bool hasPendingWork() const;
-#endif
 
 private:
   void writeOKFrame();
