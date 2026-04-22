@@ -20,7 +20,7 @@ void HeltecV4Board::begin() {
       rtc_gpio_hold_dis((gpio_num_t)P_LORA_NSS);
       rtc_gpio_deinit((gpio_num_t)P_LORA_DIO_1);
     }
-  }
+}
 
   void HeltecV4Board::onBeforeTransmit(void) {
     digitalWrite(P_LORA_TX_LED, HIGH);   // turn TX LED on
@@ -85,6 +85,10 @@ void HeltecV4Board::begin() {
   }
 
   bool HeltecV4Board::setLoRaFemLnaEnabled(bool enable) {
+#if defined(RADIO_FEM_RXGAIN) && (RADIO_FEM_RXGAIN == 0)
+    enable = false;
+#endif
+
     if (!loRaFEMControl.isLnaCanControl()) {
       return false;
     }
