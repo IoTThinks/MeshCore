@@ -266,8 +266,8 @@ void loop() {
 #if defined(NRF52_PLATFORM)
     board.sleep(0); // nrf ignores seconds param, sleeps whenever possible
 #else if defined(ESP32_PLATFORM)
-    if (!serial_interface.isWriteBusy()) {  // BLE is not busy
-      vTaskDelay(pdMS_TO_TICKS(50)); // attempt to sleep
+    if (!serial_interface.isReadBusy() && !serial_interface.isWriteBusy()) { // BLE is not busy
+      vTaskDelay(pdMS_TO_TICKS(10));  // attempt to sleep
     }
 #endif
   }
