@@ -103,6 +103,8 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
   unsigned long pending_discover_until;
   bool region_load_active;
   unsigned long dirty_contacts_expiry;
+  ChannelFilterPrefs _chanFilter;
+  PathFilterPrefs    _pathFilter;
 #if MAX_NEIGHBOURS
   NeighbourInfo neighbours[MAX_NEIGHBOURS];
 #endif
@@ -129,6 +131,16 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
 
   File openAppend(const char* fname);
   bool isLooped(const mesh::Packet* packet, const uint8_t max_counters[]);
+
+  // Channel hash filter
+  bool _channelIsBlocked(uint8_t hash) const;
+  void _loadChannelFilter();
+  void _saveChannelFilter();
+
+  // Path repeater filter
+  bool _lastHopIsBlocked(const mesh::Packet* pkt) const;
+  void _loadPathFilter();
+  void _savePathFilter();
 
 protected:
   float getAirtimeBudgetFactor() const override {
@@ -225,6 +237,19 @@ public:
 
   void handleCommand(uint32_t sender_timestamp, ClientInfo* sender, char* command, char* reply);
   void loop();
+
+  // Channel hash filter API (CLI commands)
+  void channelFilterSetMode(ChannelFilterMode mode);
+  bool channelFilterAdd(uint8_t hash);
+  bool channelFilterRemove(uint8_t hash);
+  void channelFilterClear();
+  void channelFilterList(char* reply);
+
+  // Path repeater filter API (CLI commands)
+  bool pathFilterAdd(const uint8_t* id, uint8_t len);
+  bool pathFilterRemove(const uint8_t* id, uint8_t len);
+  void pathFilterClear();
+  void pathFilterList(char* reply);
 
 #if defined(WITH_BRIDGE)
   void setBridgeState(bool enable) override {

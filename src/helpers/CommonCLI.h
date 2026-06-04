@@ -65,6 +65,38 @@ struct NodePrefs { // persisted to file
   uint8_t loop_detect;
 };
 
+// ---- Channel hash filter (repeater only, stored in /chan_filter) ----
+#define MAX_CHANNEL_FILTER_ENTRIES  16
+
+enum ChannelFilterMode : uint8_t {
+  CHANNEL_FILTER_NONE      = 0,   // No filtering (default)
+  CHANNEL_FILTER_BLACKLIST = 1,   // Drop packet with matching hashes
+  CHANNEL_FILTER_WHITELIST = 2,   // Only packet with matching hashes is allowed
+};
+
+struct ChannelFilterPrefs {
+  ChannelFilterMode mode;
+  uint8_t           count;
+  uint8_t           hashes[MAX_CHANNEL_FILTER_ENTRIES];
+};
+
+// ---- Path repeater filter (repeater only, stored in /path_filter) ----
+// Drops flood packets where the last hop in path matches a blocked repeater ID.
+// Supports 1, 2 and 3 byte IDs — size is determined by the length of the entry.
+
+#define MAX_PATH_FILTER_ENTRIES   16
+#define MAX_PATH_FILTER_ID_SIZE    3  // max bytes per entry (1, 2 or 3)
+
+struct PathFilterEntry {
+  uint8_t id[MAX_PATH_FILTER_ID_SIZE];
+  uint8_t len;   // 1, 2 or 3 — 0 means unused slot
+};
+
+struct PathFilterPrefs {
+  uint8_t         count;
+  PathFilterEntry entries[MAX_PATH_FILTER_ENTRIES];
+};
+
 class CommonCLICallbacks {
 public:
   virtual void savePrefs() = 0;

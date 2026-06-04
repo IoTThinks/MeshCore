@@ -396,6 +396,224 @@ File MyMesh::openAppend(const char *fname) {
 #endif
 }
 
+// ---- Channel hash filter ------------------------------------------------
+
+#define CHAN_FILTER_FILE  "/chan_filter"
+
+void MyMesh::_loadChannelFilter() {
+  memset(&_chanFilter, 0, sizeof(_chanFilter));
+#if defined(NRF52_PLATFORM) || defined(STM32_PLATFORM)
+  File f = _fs->open(CHAN_FILTER_FILE, FILE_O_READ);
+#elif defined(RP2040_PLATFORM)
+  File f = _fs->open(CHAN_FILTER_FILE, "r");
+#else
+  File f = _fs->open(CHAN_FILTER_FILE);
+#endif
+  if (f) {
+    f.read((uint8_t*)&_chanFilter.mode,  sizeof(_chanFilter.mode));
+    f.read((uint8_t*)&_chanFilter.count, sizeof(_chanFilter.count));
+    if (_chanFilter.count > MAX_CHANNEL_FILTER_ENTRIES) {
+      _chanFilter.count = 0;  // corrupt file – reset
+    }
+    f.read(_chanFilter.hashes, _chanFilter.count);
+    f.close();
+    MESH_DEBUG_PRINTLN("Channel filter loaded: mode=%d entries=%d", (int)_chanFilter.mode, (int)_chanFilter.count);
+  }
+}
+
+void MyMesh::_saveChannelFilter() {
+#if defined(NRF52_PLATFORM) || defined(STM32_PLATFORM)
+  _fs->remove(CHAN_FILTER_FILE);
+  File f = _fs->open(CHAN_FILTER_FILE, FILE_O_WRITE);
+#elif defined(RP2040_PLATFORM)
+  File f = _fs->open(CHAN_FILTER_FILE, "w");
+#else
+  // ESP32 SPIFFS: only remove if file exist
+  if (_fs->exists(CHAN_FILTER_FILE)) {
+    _fs->remove(CHAN_FILTER_FILE);
+  }
+  File f = _fs->open(CHAN_FILTER_FILE, "w");
+#endif
+  if (f) {
+    f.write((uint8_t*)&_chanFilter.mode,  sizeof(_chanFilter.mode));
+    f.write((uint8_t*)&_chanFilter.count, sizeof(_chanFilter.count));
+    f.write(_chanFilter.hashes, _chanFilter.count);
+    f.close();
+  } else {
+    MESH_DEBUG_PRINTLN("ERROR: could not save channel filter");
+  }
+}
+
+bool MyMesh::_channelIsBlocked(uint8_t hash) const {
+  switch (_chanFilter.mode) {
+    case CHANNEL_FILTER_BLACKLIST:
+      for (uint8_t i = 0; i < _chanFilter.count; i++) {
+        if (_chanFilter.hashes[i] == hash) return true;
+      }
+      return false;
+    case CHANNEL_FILTER_WHITELIST:
+      for (uint8_t i = 0; i < _chanFilter.count; i++) {
+        if (_chanFilter.hashes[i] == hash) return false;
+      }
+      return (_chanFilter.count > 0);  // Only block if list is not empty
+    default:
+      return false;
+  }
+}
+
+void MyMesh::channelFilterSetMode(ChannelFilterMode mode) {
+  _chanFilter.mode = mode;
+  _saveChannelFilter();
+}
+
+bool MyMesh::channelFilterAdd(uint8_t hash) {
+  for (uint8_t i = 0; i < _chanFilter.count; i++) {
+    if (_chanFilter.hashes[i] == hash) return true;  // already in list
+  }
+  if (_chanFilter.count >= MAX_CHANNEL_FILTER_ENTRIES) return false;  // full
+  _chanFilter.hashes[_chanFilter.count++] = hash;
+  _saveChannelFilter();
+  return true;
+}
+
+bool MyMesh::channelFilterRemove(uint8_t hash) {
+  for (uint8_t i = 0; i < _chanFilter.count; i++) {
+    if (_chanFilter.hashes[i] == hash) {
+      _chanFilter.hashes[i] = _chanFilter.hashes[--_chanFilter.count];  // swap with last
+      _saveChannelFilter();
+      return true;
+    }
+  }
+  return false;
+}
+
+void MyMesh::channelFilterClear() {
+  _chanFilter.count = 0;
+  _saveChannelFilter();
+}
+
+void MyMesh::channelFilterList(char* reply) {
+  // reply buffer is 160 bytes — use compact format
+  // "blacklist:2 0x81 0x5F" = max ~60 bytes even with 16 entries
+  static const char* modeStr[] = { "off", "blacklist", "whitelist" };
+  uint8_t m = (_chanFilter.mode <= CHANNEL_FILTER_WHITELIST) ? _chanFilter.mode : 0;
+  int len = sprintf(reply, "%s:%d", modeStr[m], _chanFilter.count);
+  for (uint8_t i = 0; i < _chanFilter.count; i++) {
+    len += sprintf(reply + len, " 0x%02X", _chanFilter.hashes[i]);
+  }
+}
+
+// ---- End channel hash filter --------------------------------------------
+
+// ---- Path repeater filter -----------------------------------------------
+
+#define PATH_FILTER_FILE  "/path_filter"
+
+void MyMesh::_loadPathFilter() {
+  memset(&_pathFilter, 0, sizeof(_pathFilter));
+#if defined(NRF52_PLATFORM) || defined(STM32_PLATFORM)
+  File f = _fs->open(PATH_FILTER_FILE, FILE_O_READ);
+#elif defined(RP2040_PLATFORM)
+  File f = _fs->open(PATH_FILTER_FILE, "r");
+#else
+  File f = _fs->open(PATH_FILTER_FILE);
+#endif
+  if (f) {
+    f.read((uint8_t*)&_pathFilter.count, sizeof(_pathFilter.count));
+    if (_pathFilter.count > MAX_PATH_FILTER_ENTRIES) {
+      _pathFilter.count = 0;  // corrupt file – reset
+    }
+    f.read((uint8_t*)_pathFilter.entries, _pathFilter.count * sizeof(PathFilterEntry));
+    f.close();
+    MESH_DEBUG_PRINTLN("Path filter loaded: entries=%d", (int)_pathFilter.count);
+  }
+}
+
+void MyMesh::_savePathFilter() {
+#if defined(NRF52_PLATFORM) || defined(STM32_PLATFORM)
+  _fs->remove(PATH_FILTER_FILE);
+  File f = _fs->open(PATH_FILTER_FILE, FILE_O_WRITE);
+#elif defined(RP2040_PLATFORM)
+  File f = _fs->open(PATH_FILTER_FILE, "w");
+#else
+  if (_fs->exists(PATH_FILTER_FILE)) {
+    _fs->remove(PATH_FILTER_FILE);
+  }
+  File f = _fs->open(PATH_FILTER_FILE, "w");
+#endif
+  if (f) {
+    f.write((uint8_t*)&_pathFilter.count, sizeof(_pathFilter.count));
+    f.write((uint8_t*)_pathFilter.entries, _pathFilter.count * sizeof(PathFilterEntry));
+    f.close();
+  } else {
+    MESH_DEBUG_PRINTLN("ERROR: could not save path filter");
+  }
+}
+
+bool MyMesh::_lastHopIsBlocked(const mesh::Packet* pkt) const {
+  if (_pathFilter.count == 0) return false;
+
+  uint8_t hash_size  = pkt->getPathHashSize();   // 1, 2 or 3
+  uint8_t hash_count = pkt->getPathHashCount();
+  if (hash_count == 0) return false;
+
+  // Last hop = last hash_size bytes in path
+  const uint8_t* last_hop = pkt->path + (hash_count - 1) * hash_size;
+
+  for (uint8_t i = 0; i < _pathFilter.count; i++) {
+    const PathFilterEntry& e = _pathFilter.entries[i];
+    if (e.len == 0 || e.len != hash_size) continue;  // skip if size mismatch
+    if (memcmp(e.id, last_hop, hash_size) == 0) return true;
+  }
+  return false;
+}
+
+bool MyMesh::pathFilterAdd(const uint8_t* id, uint8_t len) {
+  if (len == 0 || len > MAX_PATH_FILTER_ID_SIZE) return false;
+  // Check for duplicates
+  for (uint8_t i = 0; i < _pathFilter.count; i++) {
+    if (_pathFilter.entries[i].len == len &&
+        memcmp(_pathFilter.entries[i].id, id, len) == 0) return true;  // already in list
+  }
+  if (_pathFilter.count >= MAX_PATH_FILTER_ENTRIES) return false;  // full
+  PathFilterEntry& e = _pathFilter.entries[_pathFilter.count];
+  memcpy(e.id, id, len);
+  e.len = len;
+  _pathFilter.count++;  // increment EFTER entry er fuldt initialiseret
+  _savePathFilter();
+  return true;
+}
+
+bool MyMesh::pathFilterRemove(const uint8_t* id, uint8_t len) {
+  for (uint8_t i = 0; i < _pathFilter.count; i++) {
+    if (_pathFilter.entries[i].len == len &&
+        memcmp(_pathFilter.entries[i].id, id, len) == 0) {
+      _pathFilter.entries[i] = _pathFilter.entries[--_pathFilter.count];  // swap with last
+      _savePathFilter();
+      return true;
+    }
+  }
+  return false;
+}
+
+void MyMesh::pathFilterClear() {
+  _pathFilter.count = 0;
+  _savePathFilter();
+}
+
+void MyMesh::pathFilterList(char* reply) {
+  int len = sprintf(reply, "path_filter:%d", _pathFilter.count);
+  for (uint8_t i = 0; i < _pathFilter.count; i++) {
+    const PathFilterEntry& e = _pathFilter.entries[i];
+    len += sprintf(reply + len, " ");
+    for (uint8_t b = 0; b < e.len; b++) {
+      len += sprintf(reply + len, "%02X", e.id[b]);
+    }
+  }
+}
+
+// ---- End path repeater filter -------------------------------------------
+
 static uint8_t max_loop_minimal[] =  { 0, /* 1-byte */  4, /* 2-byte */  2, /* 3-byte */  1 };
 static uint8_t max_loop_moderate[] = { 0, /* 1-byte */  2, /* 2-byte */  1, /* 3-byte */  1 };
 static uint8_t max_loop_strict[] =   { 0, /* 1-byte */  1, /* 2-byte */  1, /* 3-byte */  1 };
@@ -558,6 +776,28 @@ bool MyMesh::filterRecvFloodPacket(mesh::Packet* pkt) {
   } else {
     recv_pkt_region = NULL;
   }
+
+  // Channel hash filter: check GRP_TXT and GRP_DATA flood-packets
+  if (_chanFilter.mode != CHANNEL_FILTER_NONE) {
+    uint8_t payloadType = pkt->getPayloadType();
+    if (payloadType == PAYLOAD_TYPE_GRP_TXT || payloadType == PAYLOAD_TYPE_GRP_DATA) {
+      if (pkt->payload_len >= 1) {
+        uint8_t ch_hash = pkt->payload[0];
+        if (_channelIsBlocked(ch_hash)) {
+          MESH_DEBUG_PRINTLN("*** CHANNEL FILTER: hash=0x%02X dropped (mode=%d) ***",
+                             (uint32_t)ch_hash, (uint32_t)_chanFilter.mode);
+          return true;  // true = drop packet (block flood)
+        }
+      }
+    }
+  }
+
+  // Path repeater filter: drop if last hop in path is a blocked repeater
+  if (_lastHopIsBlocked(pkt)) {
+    MESH_DEBUG_PRINTLN("*** PATH FILTER: last hop blocked, packet dropped ***");
+    return true;
+  }
+
   // do normal processing
   return false;
 }
@@ -929,6 +1169,8 @@ void MyMesh::begin(FILESYSTEM *fs) {
   acl.load(_fs, self_id);
   // TODO: key_store.begin();
   region_map.load(_fs);
+  _loadChannelFilter();
+  _loadPathFilter();
 
   // establish default-scope
   {
@@ -1375,6 +1617,80 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, ClientInfo* sender, char *
     } else {
       sendNodeDiscoverReq();
       strcpy(reply, "OK - Discover sent");
+    }
+  } else if (memcmp(command, "channel_filter", 14) == 0) {
+    const char* arg = command + 14;
+    while (*arg == ' ') arg++;  // skip space
+
+    if (strcmp(arg, "blacklist") == 0) {
+      channelFilterSetMode(CHANNEL_FILTER_BLACKLIST);
+      strcpy(reply, "OK - channel filter: BLACKLIST");
+    } else if (strcmp(arg, "whitelist") == 0) {
+      channelFilterSetMode(CHANNEL_FILTER_WHITELIST);
+      strcpy(reply, "OK - channel filter: WHITELIST");
+    } else if (strcmp(arg, "off") == 0) {
+      channelFilterSetMode(CHANNEL_FILTER_NONE);
+      strcpy(reply, "OK - channel filter: OFF");
+    } else if (strncmp(arg, "add ", 4) == 0) {
+      uint8_t hash = (uint8_t)strtol(arg + 4, nullptr, 0);  // auto hex/dec
+      if (channelFilterAdd(hash)) {
+        sprintf(reply, "OK - added 0x%02X", (uint32_t)hash);
+      } else {
+        strcpy(reply, "Err - list full (max 16)");
+      }
+    } else if (strncmp(arg, "remove ", 7) == 0) {
+      uint8_t hash = (uint8_t)strtol(arg + 7, nullptr, 0);
+      if (channelFilterRemove(hash)) {
+        sprintf(reply, "OK - removed 0x%02X", (uint32_t)hash);
+      } else {
+        sprintf(reply, "Err - 0x%02X not found", (uint32_t)hash);
+      }
+    } else if (strcmp(arg, "clear") == 0) {
+      channelFilterClear();
+      strcpy(reply, "OK - list cleared");
+    } else if (strcmp(arg, "list") == 0) {
+      channelFilterList(reply);
+    } else {
+      strcpy(reply, "Err - usage: channel_filter <blacklist|whitelist|off|add <hash>|remove <hash>|clear|list>");
+    }
+  } else if (memcmp(command, "path_filter", 11) == 0) {
+    const char* arg = command + 11;
+    while (*arg == ' ') arg++;
+
+    if (strncmp(arg, "add ", 4) == 0) {
+      const char* hex = arg + 4;
+      uint8_t id[MAX_PATH_FILTER_ID_SIZE];
+      uint8_t hex_len = (uint8_t)strlen(hex);
+      // Accept 2, 4 or 6 hex chars (1, 2 or 3 bytes)
+      if (hex_len != 2 && hex_len != 4 && hex_len != 6) {
+        strcpy(reply, "Err - ID must be 2, 4 or 6 hex chars (1, 2 or 3 bytes)");
+      } else if (!mesh::Utils::fromHex(id, hex_len / 2, hex)) {
+        strcpy(reply, "Err - bad hex");
+      } else if (pathFilterAdd(id, hex_len / 2)) {
+        sprintf(reply, "OK - added %s", hex);
+      } else {
+        strcpy(reply, "Err - list full (max 16)");
+      }
+    } else if (strncmp(arg, "remove ", 7) == 0) {
+      const char* hex = arg + 7;
+      uint8_t id[MAX_PATH_FILTER_ID_SIZE];
+      uint8_t hex_len = (uint8_t)strlen(hex);
+      if (hex_len != 2 && hex_len != 4 && hex_len != 6) {
+        strcpy(reply, "Err - ID must be 2, 4 or 6 hex chars");
+      } else if (!mesh::Utils::fromHex(id, hex_len / 2, hex)) {
+        strcpy(reply, "Err - bad hex");
+      } else if (pathFilterRemove(id, hex_len / 2)) {
+        sprintf(reply, "OK - removed %s", hex);
+      } else {
+        sprintf(reply, "Err - %s not found", hex);
+      }
+    } else if (strcmp(arg, "clear") == 0) {
+      pathFilterClear();
+      strcpy(reply, "OK - path filter cleared");
+    } else if (strcmp(arg, "list") == 0) {
+      pathFilterList(reply);
+    } else {
+      strcpy(reply, "Err - usage: path_filter <add <hex>|remove <hex>|clear|list>");
     }
   } else{
     _cli.handleCommand(sender_timestamp, command, reply);  // common CLI commands
