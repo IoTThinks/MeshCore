@@ -60,6 +60,14 @@ void ST7735Display::turnOff() {
 #else
     digitalWrite(PIN_TFT_LEDA_CTL, LOW); 
 #endif
+
+    // Prevent back-powering to save 2.5 mA
+    pinMode(PIN_TFT_CS, INPUT);
+    pinMode(PIN_TFT_DC, INPUT);
+    pinMode(PIN_TFT_SDA, INPUT);
+    pinMode(PIN_TFT_SCL, INPUT);
+    pinMode(PIN_TFT_RST, INPUT);
+
     _isOn = false;
 
     if (_peripher_power) _peripher_power->release();
