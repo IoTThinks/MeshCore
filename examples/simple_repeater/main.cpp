@@ -159,4 +159,9 @@ void loop() {
     }
 #endif
   }
+
+  if (the_mesh.getNodePrefs()->reboot_interval > 0 &&
+      the_mesh.millisHasNowPassed(the_mesh.getNodePrefs()->reboot_interval * 3600000)) {
+    board.reboot();
+  }
 }
