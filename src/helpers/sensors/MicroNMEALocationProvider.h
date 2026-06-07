@@ -76,6 +76,7 @@ public :
     void begin() override {
         claim();
         if (_pin_en != -1) {
+            pinMode(_pin_en, OUTPUT);
             digitalWrite(_pin_en, PIN_GPS_EN_ACTIVE);
         }
         if (_pin_reset != -1) {
@@ -94,6 +95,7 @@ public :
     void stop() override {
         if (_pin_en != -1) {
             digitalWrite(_pin_en, !PIN_GPS_EN_ACTIVE);
+            pinMode(_pin_en, INPUT); // Reduce 0.3mA leaking
         }
         if (_pin_reset != -1) {
             digitalWrite(_pin_reset, GPS_RESET_FORCE);
