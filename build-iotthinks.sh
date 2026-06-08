@@ -88,7 +88,7 @@ Heltec_t096_companion_radio_ble \
 Heltec_t096_companion_radio_ble_femoff
 
 ############# Companions BLE PS #############
-# ESP32 - 16 boards
+# ESP32 - 18 boards
 sh build.sh build-firmware \
 Heltec_v3_companion_radio_ble_ps \
 heltec_v4_companion_radio_ble_ps \
@@ -106,8 +106,46 @@ LilyGo_TLora_V2_1_1_6_companion_radio_ble_ps \
 Heltec_ct62_companion_radio_ble_ps \
 T_Beam_S3_Supreme_SX1262_companion_radio_ble_ps \
 Tbeam_SX1262_companion_radio_ble_ps \
-Tbeam_SX1276_companion_radio_ble_ps
+heltec_v4_expansionkit_tft_companion_radio_ble_ps \
+LilyGo_T3S3_sx1262_companion_radio_ble_ps
+
+# Not working
+Tbeam_SX1276_companion_radio_ble_ps \
 
 ############# Companions USB #############
 sh build.sh build-firmware \
 Heltec_t096_companion_radio_usb
+
+# Test
+export FIRMWARE_VERSION="PowerSaving15.1"
+
+sh build.sh build-firmware \
+RAK_4631_repeater \
+Heltec_t114_repeater \
+Heltec_mesh_solar_repeater \
+ProMicro_repeater \
+LilyGo_T-Echo_repeater \
+RAK_3401_repeater \
+RAK_WisMesh_Tag_repeater \
+GAT562_30S_Mesh_Kit_repeater \
+GAT562_Mesh_Tracker_Pro_repeater \
+ThinkNode_M1_repeater \
+Heltec_t096_repeater
+
+# v7
+sh build.sh build-firmware \
+Xiao_nrf52_repeater \
+SenseCap_Solar_repeater \
+t1000e_repeater \
+WioTrackerL1_repeater \
+ikoka_nano_nrf_22dbm_repeater \
+ikoka_nano_nrf_30dbm_repeater \
+ikoka_nano_nrf_33dbm_repeater
+
+export FIRMWARE_VERSION="PowerSaving15.1-8.7mA"
+sh build.sh build-firmware Heltec_t096_repeater
+
+export FIRMWARE_VERSION="PowerSaving15.1-outpath"
+
+export FIRMWARE_VERSION="PowerSaving15.1-fixPowerOff"
+
