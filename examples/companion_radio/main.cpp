@@ -227,6 +227,7 @@ void setup() {
 #endif
 
 #ifdef ESP32_PLATFORM
+#if !CONFIG_IDF_TARGET_ESP32C6
   // Enable BLE sleep
   esp_err_t errBLESleep = esp_bt_sleep_enable();
   if (errBLESleep == ESP_OK) {
@@ -234,6 +235,7 @@ void setup() {
   } else {
     Serial.printf("Bluetooth sleep enable failed: %s\n", esp_err_to_name(errBLESleep));
   }
+#endif
 
 #if CONFIG_IDF_TARGET_ESP32C3
   esp_pm_config_esp32c3_t pm_config;
@@ -241,6 +243,8 @@ void setup() {
   esp_pm_config_esp32s3_t pm_config;
 #elif CONFIG_IDF_TARGET_ESP32
   esp_pm_config_esp32_t pm_config;
+#elif CONFIG_IDF_TARGET_ESP32C6
+  esp_pm_config_t pm_config;
 #endif
 
   // Configure Power Management
