@@ -14,6 +14,7 @@
 #include <Wire.h>
 #include "soc/rtc.h"
 #include "esp_system.h"
+#include <driver/rtc_io.h>
 
 class ESP32Board : public mesh::MainBoard {
 protected:
@@ -60,6 +61,31 @@ public:
     }
 
     return raw / 4;
+  }
+
+  void powerOff() override {
+    enterDeepSleep(0); // Do not wakeup
+  }
+
+  void enterDeepSleep(uint32_t secs) {
+    // Clear stale wakeup sources to avoid ghost wakeup
+    // This is required when Power Management and automatic lightsleep are enabled
+    esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+
+    if (secs > 0) {
+      esp_sleep_enable_timer_wakeup(secs * 1000000ULL);
+    }
+
+    // Keep LoRa inactive during deepsleep
+    digitalWrite(P_LORA_NSS, HIGH);
+#if CONFIG_IDF_TARGET_ESP32C3
+    gpio_hold_en((gpio_num_t)P_LORA_NSS);
+#else
+    rtc_gpio_hold_en((gpio_num_t)P_LORA_NSS);
+#endif
+
+    // Finally set ESP32 into deepsleep
+    esp_deep_sleep_start();   // CPU halts here and never returns!
   }
 
   uint32_t getIRQGpio() override {
