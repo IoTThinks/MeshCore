@@ -305,19 +305,28 @@ static const char* _triggerName(ScriptTriggerType t, ScriptReportVar rv) {
 void MyMesh::scriptHandleCommand(const char* arg, char* reply) {
   while (*arg == ' ') arg++;  // skip leading spaces
 
-  // ── rule list ──────────────────────────────────────────────────────────────
-  if (strcmp(arg, "list") == 0) {
-    if (_scriptRuleCount == 0) {
-      strcpy(reply, "No rules"); return;
-    }
-    int len = 0;
-    for (uint8_t i = 0; i < _scriptRuleCount; i++) {
-      const ScriptRule& r = _scriptRules[i];
+  // ── rule list [page] / rule list d<n> ────────────────────────────────────
+  // "rule list"      — compact paged view, page 1
+  // "rule list 2"    — compact paged view, page 2
+  // "rule list d1"   — full detail for rule n
+  if (strncmp(arg, "list", 4) == 0 && (arg[4] == 0 || arg[4] == ' ')) {
+    if (_scriptRuleCount == 0) { strcpy(reply, "No rules"); return; }
+
+    const char* list_arg = arg + 4;
+    while (*list_arg == ' ') list_arg++;
+
+    // ── Detail view: rule list d<n> ──────────────────────────────────────
+    if (list_arg[0] == 'd') {
+      int idx = atoi(list_arg + 1) - 1;
+      if (idx < 0 || idx >= (int)_scriptRuleCount) {
+        snprintf(reply, 160, "Err - invalid index (1..%d)", (int)_scriptRuleCount);
+        return;
+      }
+      const ScriptRule& r = _scriptRules[idx];
       char at_buf[12] = "";
       if (r.at_hour != -1) snprintf(at_buf, sizeof(at_buf), " at:%02d:%02d", r.at_hour, r.at_minute);
-      len += snprintf(reply + len, 160 - len,
-        "%d:%s %s/%us%s @%s:%s%s%s \"%s\"\n",
-        i + 1,
+      snprintf(reply, 160, "%d:%s %s/%us%s @%s:%s%s%s \"%s\"",
+        idx + 1,
         r.enabled ? "on" : "off",
         _triggerName(r.trigger, r.report_var),
         r.interval_secs,
@@ -327,6 +336,63 @@ void MyMesh::scriptHandleCommand(const char* arg, char* reply) {
         r.scope_name[0] ? " @scope:" : "",
         r.scope_name[0] ? r.scope_name : "",
         r.message);
+      return;
+    }
+
+    // ── Compact paged view ────────────────────────────────────────────────
+    // Compact format per rule (~45 bytes):
+    //   "1:on report:bat/3600 @h:alertchan at:08:00"
+    //   "2:off bat<3400/1800 @p:b8da.."
+    // @h: = hash channel, @p: = first 4 chars of private key + ".."
+    int page = list_arg[0] ? atoi(list_arg) : 1;
+    if (page < 1) page = 1;
+
+    // Determine rules per page by fitting into 150 bytes
+    // Worst compact line: "8:off report:noise/86400 at:23:59 @p:b8da.. @s:denmark" = ~57 bytes
+    // 150 / 57 = 2 rules per page safe minimum, use 3 as target
+    const int RULES_PER_PAGE = 3;
+    int start = (page - 1) * RULES_PER_PAGE;
+    int total_pages = ((int)_scriptRuleCount + RULES_PER_PAGE - 1) / RULES_PER_PAGE;
+
+    if (start >= (int)_scriptRuleCount) {
+      snprintf(reply, 160, "Err - page %d of %d", page, total_pages);
+      return;
+    }
+
+    int len = 0;
+    // Page header: "p1/2: " to show navigation
+    len += snprintf(reply + len, 160 - len, "p%d/%d:", page, total_pages);
+
+    int end = start + RULES_PER_PAGE;
+    if (end > (int)_scriptRuleCount) end = (int)_scriptRuleCount;
+
+    for (int i = start; i < end; i++) {
+      const ScriptRule& r = _scriptRules[i];
+
+      // Channel: @h:name or @p:first4..
+      char chan_buf[12];
+      if (r.chan_is_hash) {
+        snprintf(chan_buf, sizeof(chan_buf), "@h:%.7s", r.chan_name);
+      } else {
+        snprintf(chan_buf, sizeof(chan_buf), "@p:%.4s..", r.chan_name);
+      }
+
+      // at: suffix
+      char at_buf[10] = "";
+      if (r.at_hour != -1) snprintf(at_buf, sizeof(at_buf), " %02d:%02d", r.at_hour, r.at_minute);
+
+      // scope suffix: first 6 chars
+      char sc_buf[10] = "";
+      if (r.scope_name[0]) snprintf(sc_buf, sizeof(sc_buf), " @s:%.6s", r.scope_name);
+
+      len += snprintf(reply + len, 160 - len, "%d:%s %s/%u %s%s%s ", i + 1,
+        r.enabled ? "on" : "off",
+        _triggerName(r.trigger, r.report_var),
+        r.interval_secs,
+        chan_buf,
+        at_buf,
+        sc_buf);
+
       if (len >= 155) break;
     }
     return;
