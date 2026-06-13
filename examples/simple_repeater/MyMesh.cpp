@@ -1,5 +1,6 @@
 #include "MyMesh.h"
 #include <algorithm>
+#include "ScriptEngine.h"
 
 /* ------------------------------ Config -------------------------------- */
 
@@ -975,6 +976,9 @@ void MyMesh::begin(FILESYSTEM *fs) {
 
   board.setAdcMultiplier(_prefs.adc_multiplier);
 
+  _scriptLoad();
+  _nextScriptEval = futureMillis(60000UL);  // first evaluation after 60s
+
 #if ENV_INCLUDE_GPS == 1
   applyGpsPrefs();
 #endif
@@ -1390,6 +1394,10 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, ClientInfo* sender, char *
       sendNodeDiscoverReq();
       strcpy(reply, "OK - Discover sent");
     }
+  } else if (memcmp(command, "report", 4) == 0) {
+    const char* arg = command + 4;
+    while (*arg == ' ') arg++;
+    scriptHandleCommand(arg, reply);
   } else{
     _cli.handleCommand(sender_timestamp, command, reply);  // common CLI commands
   }
@@ -1432,6 +1440,12 @@ void MyMesh::loop() {
   if (dirty_contacts_expiry && millisHasNowPassed(dirty_contacts_expiry)) {
     acl.save(_fs);
     dirty_contacts_expiry = 0;
+  }
+
+  // script engine: evaluate rules every minute
+  if (_nextScriptEval && millisHasNowPassed(_nextScriptEval)) {
+    _nextScriptEval = futureMillis(60000UL);
+    _scriptEvaluate();
   }
 
   // update uptime
