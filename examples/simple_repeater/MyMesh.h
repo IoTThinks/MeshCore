@@ -34,7 +34,7 @@
 #include <helpers/TxtDataHelpers.h>
 #include <helpers/RegionMap.h>
 #include "RateLimiter.h"
-#include "ScriptEngine.h"
+#include "ReportEngine.h"
 
 #ifdef WITH_BRIDGE
 extern AbstractBridge* bridge;

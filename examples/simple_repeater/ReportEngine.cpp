@@ -8,8 +8,8 @@
 //   _scriptEvaluate()                     — from loop() on timer
 //   _scriptSendMessage(rule, text)        — internal, called by _scriptEvaluate()
 
-#include "ScriptEngine.h"
 #include "MyMesh.h"
+#include "ReportEngine.h"
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  LOAD / SAVE
@@ -325,7 +325,8 @@ void MyMesh::scriptHandleCommand(const char* arg, char* reply) {
       const ScriptRule& r = _scriptRules[idx];
       char at_buf[12] = "";
       if (r.at_hour != -1) snprintf(at_buf, sizeof(at_buf), " at:%02d:%02d", r.at_hour, r.at_minute);
-      snprintf(reply, 160, "%d:%s %s/%us%s @%s:%s%s%s \"%s\"",
+      snprintf(reply, 160,
+        "%d:%s %s/%us%s @%s:%s%s%s \"%s\"",
         idx + 1,
         r.enabled ? "on" : "off",
         _triggerName(r.trigger, r.report_var),
@@ -385,7 +386,9 @@ void MyMesh::scriptHandleCommand(const char* arg, char* reply) {
       char sc_buf[10] = "";
       if (r.scope_name[0]) snprintf(sc_buf, sizeof(sc_buf), " @s:%.6s", r.scope_name);
 
-      len += snprintf(reply + len, 160 - len, "%d:%s %s/%u %s%s%s ", i + 1,
+      len += snprintf(reply + len, 160 - len,
+        "%d:%s %s/%u %s%s%s",
+        i + 1,
         r.enabled ? "on" : "off",
         _triggerName(r.trigger, r.report_var),
         r.interval_secs,
