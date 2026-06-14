@@ -135,6 +135,7 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
   ScriptRule    _scriptRules[MAX_SCRIPT_RULES];
   uint8_t       _scriptRuleCount = 0;
   unsigned long _nextScriptEval  = 0;
+  bool          _scriptRulesDirty = false;  // deferred SPIFFS save
 
   void _scriptLoad();
   void _scriptSave();
@@ -245,7 +246,7 @@ public:
     {
       bridge.begin();
     }
-    else 
+    else
     {
       bridge.end();
     }

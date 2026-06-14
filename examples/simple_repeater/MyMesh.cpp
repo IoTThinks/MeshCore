@@ -1,6 +1,6 @@
 #include "MyMesh.h"
-#include "ReportEngine.h"
 #include <algorithm>
+#include "ReportEngine.h"
 
 /* ------------------------------ Config -------------------------------- */
 
@@ -345,7 +345,7 @@ int MyMesh::handleRequest(ClientInfo *sender, uint32_t sender_timestamp, uint8_t
       int results_offset = 0;
       uint8_t results_buffer[130];
       for(int index = 0; index < count && index + offset < neighbours_count; index++){
-        
+
         // stop if we can't fit another entry in results
         int entry_size = pubkey_prefix_length + 4 + 1;
         if(results_offset + entry_size > sizeof(results_buffer)){
@@ -1156,7 +1156,7 @@ void MyMesh::formatRadioStatsReply(char *reply) {
 }
 
 void MyMesh::formatPacketStatsReply(char *reply) {
-  StatsFormatHelper::formatPacketStats(reply, radio_driver, getNumSentFlood(), getNumSentDirect(), 
+  StatsFormatHelper::formatPacketStats(reply, radio_driver, getNumSentFlood(), getNumSentDirect(),
                                        getNumRecvFlood(), getNumRecvDirect());
 }
 
@@ -1394,8 +1394,8 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, ClientInfo* sender, char *
       sendNodeDiscoverReq();
       strcpy(reply, "OK - Discover sent");
     }
-  } else if (memcmp(command, "report", 4) == 0) {
-    const char* arg = command + 4;
+  } else if (memcmp(command, "report", 6) == 0) {
+    const char* arg = command + 6;
     while (*arg == ' ') arg++;
     scriptHandleCommand(arg, reply);
   } else{
@@ -1446,6 +1446,12 @@ void MyMesh::loop() {
   if (_nextScriptEval && millisHasNowPassed(_nextScriptEval)) {
     _nextScriptEval = futureMillis(60000UL);
     _scriptEvaluate();
+  }
+
+  // script engine: deferred SPIFFS save (avoids blocking CLI on slow filesystems e.g. nRF52)
+  if (_scriptRulesDirty) {
+    _scriptRulesDirty = false;
+    _scriptSave();
   }
 
   // update uptime

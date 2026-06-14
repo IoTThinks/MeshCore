@@ -1,4 +1,4 @@
-// ScriptEngine.cpp
+// ReportEngine.cpp
 //
 // Implements load/save, CLI parser and evaluation of script rules.
 // Included directly from MyMesh.cpp — call the four public methods:
@@ -67,7 +67,7 @@ void MyMesh::_scriptSave() {
 //  SEND HELPER
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Initialise a GroupChannel from a ScriptRule.
+// Initialise a GroupChannel from a report.
 //
 // Both channel types use the same 16-byte key and the same hash derivation:
 //   secret[] = 16-byte key, zero-padded to PUB_KEY_SIZE
@@ -268,21 +268,21 @@ void MyMesh::_scriptEvaluate() {
 // ═══════════════════════════════════════════════════════════════════════════════
 //
 // Command format:
-//   rule add bat<3400  /3600 @private:MyKey  "Battery low: {value}{unit}"
-//   rule add bat>4300  /3600 @hash:AlertChan "Battery high: {value}{unit}"
-//   rule add temp<-10  /3600 @private:MyKey  "Temp low: {value}{unit}"
-//   rule add temp>60   /3600 @hash:Chan      "Temp high: {value}{unit}"
-//   rule add noise>-90 /3600 @hash:Chan      "Noise: {value}{unit}"
-//   rule add noise<-80 /3600 @hash:Chan      "Noise: {value}{unit}"
-//   rule add report:bat   /3600 @hash:Chan   "Battery: {value}{unit}"
-//   rule add report:temp  /1800 @hash:Chan   "Temp: {value}{unit}"
-//   rule add report:noise /7200 @hash:Chan   "Noise floor: {value}{unit}"
-//   rule list
-//   rule del <idx>          (1-based index)
-//   rule clear
-//   rule test <idx>         (force immediate fire)
-//   rule enable <idx>
-//   rule disable <idx>
+//   report add bat<3400  /3600 @private:MyKey  "Battery low: {value}{unit}"
+//   report add bat>4300  /3600 @hash:AlertChan "Battery high: {value}{unit}"
+//   report add temp<-10  /3600 @private:MyKey  "Temp low: {value}{unit}"
+//   report add temp>60   /3600 @hash:Chan      "Temp high: {value}{unit}"
+//   report add noise>-90 /3600 @hash:Chan      "Noise: {value}{unit}"
+//   report add noise<-80 /3600 @hash:Chan      "Noise: {value}{unit}"
+//   report add report:bat   /3600 @hash:Chan   "Battery: {value}{unit}"
+//   report add report:temp  /1800 @hash:Chan   "Temp: {value}{unit}"
+//   report add report:noise /7200 @hash:Chan   "Noise floor: {value}{unit}"
+//   report list
+//   report del <idx>          (1-based index)
+//   report clear
+//   report test <idx>         (force immediate fire)
+//   report enable <idx>
+//   report disable <idx>
 
 static const char* _triggerName(ScriptTriggerType t, ScriptReportVar rv) {
   switch (t) {
@@ -305,17 +305,17 @@ static const char* _triggerName(ScriptTriggerType t, ScriptReportVar rv) {
 void MyMesh::scriptHandleCommand(const char* arg, char* reply) {
   while (*arg == ' ') arg++;  // skip leading spaces
 
-  // ── rule list [page] / rule list d<n> ────────────────────────────────────
-  // "rule list"      — compact paged view, page 1
-  // "rule list 2"    — compact paged view, page 2
-  // "rule list d1"   — full detail for rule n
+  // ── report list [page] / report list d<n> ────────────────────────────────────
+  // "report list"      — compact paged view, page 1
+  // "report list 2"    — compact paged view, page 2
+  // "report list d1"   — full detail for report n
   if (strncmp(arg, "list", 4) == 0 && (arg[4] == 0 || arg[4] == ' ')) {
-    if (_scriptRuleCount == 0) { strcpy(reply, "No rules"); return; }
+    if (_scriptRuleCount == 0) { strcpy(reply, "No reports"); return; }
 
     const char* list_arg = arg + 4;
     while (*list_arg == ' ') list_arg++;
 
-    // ── Detail view: rule list d<n> ──────────────────────────────────────
+    // ── Detail view: report list d<n> ──────────────────────────────────────
     if (list_arg[0] == 'd') {
       int idx = atoi(list_arg + 1) - 1;
       if (idx < 0 || idx >= (int)_scriptRuleCount) {
@@ -341,16 +341,16 @@ void MyMesh::scriptHandleCommand(const char* arg, char* reply) {
     }
 
     // ── Compact paged view ────────────────────────────────────────────────
-    // Compact format per rule (~45 bytes):
+    // Compact format per report (~45 bytes):
     //   "1:on report:bat/3600 @h:alertchan at:08:00"
     //   "2:off bat<3400/1800 @p:b8da.."
     // @h: = hash channel, @p: = first 4 chars of private key + ".."
     int page = list_arg[0] ? atoi(list_arg) : 1;
     if (page < 1) page = 1;
 
-    // Determine rules per page by fitting into 150 bytes
-    // Worst compact line: "8:off report:noise/86400 at:23:59 @p:b8da.. @s:denmark" = ~57 bytes
-    // 150 / 57 = 2 rules per page safe minimum, use 3 as target
+    // Determine reports per page by fitting into 150 bytes
+    // Worst compact line: "8:off report:noise/86400 at:23:59 @p:b8da.. @s:world" = ~55 bytes
+    // 150 / 57 = 2 reports per page safe minimum, use 3 as target
     const int RULES_PER_PAGE = 3;
     int start = (page - 1) * RULES_PER_PAGE;
     int total_pages = ((int)_scriptRuleCount + RULES_PER_PAGE - 1) / RULES_PER_PAGE;
@@ -362,7 +362,7 @@ void MyMesh::scriptHandleCommand(const char* arg, char* reply) {
 
     int len = 0;
     // Page header: "p1/2: " to show navigation
-    len += snprintf(reply + len, 160 - len, "p%d/%d:", page, total_pages);
+    len += snprintf(reply + len, 160 - len, "p%d/%d:\n", page, total_pages);
 
     int end = start + RULES_PER_PAGE;
     if (end > (int)_scriptRuleCount) end = (int)_scriptRuleCount;
@@ -387,7 +387,7 @@ void MyMesh::scriptHandleCommand(const char* arg, char* reply) {
       if (r.scope_name[0]) snprintf(sc_buf, sizeof(sc_buf), " @s:%.6s", r.scope_name);
 
       len += snprintf(reply + len, 160 - len,
-        "%d:%s %s/%u %s%s%s",
+        "%d:%s %s/%u %s%s%s\n",
         i + 1,
         r.enabled ? "on" : "off",
         _triggerName(r.trigger, r.report_var),
@@ -401,16 +401,16 @@ void MyMesh::scriptHandleCommand(const char* arg, char* reply) {
     return;
   }
 
-  // ── rule clear ────────────────────────────────────────────────────────────
+  // ── report clear ────────────────────────────────────────────────────────────
   if (strcmp(arg, "clear") == 0) {
     _scriptRuleCount = 0;
     memset(_scriptRules, 0, sizeof(_scriptRules));
-    _scriptSave();
+    _scriptRulesDirty = true;  // deferred save — avoids blocking CLI on nRF52
     strcpy(reply, "OK - all rules cleared");
     return;
   }
 
-  // ── rule del <n> ──────────────────────────────────────────────────────────
+  // ── report del <n> ──────────────────────────────────────────────────────────
   if (strncmp(arg, "del ", 4) == 0) {
     int idx = atoi(arg + 4) - 1;  // convert 1-based to 0-based
     if (idx < 0 || idx >= (int)_scriptRuleCount) {
@@ -422,12 +422,12 @@ void MyMesh::scriptHandleCommand(const char* arg, char* reply) {
       _scriptRules[j] = _scriptRules[j + 1];
     }
     _scriptRuleCount--;
-    _scriptSave();
+    _scriptRulesDirty = true;  // deferred save — avoids blocking CLI on nRF52
     snprintf(reply, 160, "OK - rule %d deleted", idx + 1);
     return;
   }
 
-  // ── rule enable / disable <n> ─────────────────────────────────────────────
+  // ── report enable / disable <n> ─────────────────────────────────────────────
   if (strncmp(arg, "enable ", 7) == 0 || strncmp(arg, "disable ", 8) == 0) {
     bool en = (arg[0] == 'e');
     int idx = atoi(arg + (en ? 7 : 8)) - 1;
@@ -436,12 +436,12 @@ void MyMesh::scriptHandleCommand(const char* arg, char* reply) {
       return;
     }
     _scriptRules[idx].enabled = en;
-    _scriptSave();
+    _scriptRulesDirty = true;  // deferred save — avoids blocking CLI on nRF52
     snprintf(reply, 160, "OK - rule %d %s", idx + 1, en ? "enabled" : "disabled");
     return;
   }
 
-  // ── rule test <n> ─────────────────────────────────────────────────────────
+  // ── report test <n> ─────────────────────────────────────────────────────────
   if (strncmp(arg, "test ", 5) == 0) {
     int idx = atoi(arg + 5) - 1;
     if (idx < 0 || idx >= (int)_scriptRuleCount) {
@@ -455,7 +455,7 @@ void MyMesh::scriptHandleCommand(const char* arg, char* reply) {
     return;
   }
 
-  // ── rule add ──────────────────────────────────────────────────────────────
+  // ── report add ──────────────────────────────────────────────────────────────
   if (strncmp(arg, "add ", 4) == 0) {
     if (_scriptRuleCount >= MAX_SCRIPT_RULES) {
       snprintf(reply, 160, "Err - max %d rules reached", MAX_SCRIPT_RULES);
@@ -486,7 +486,7 @@ void MyMesh::scriptHandleCommand(const char* arg, char* reply) {
         TRIGGER_NOISE_ABOVE, TRIGGER_NOISE_BELOW
       };
       bool found = false;
-      for (int k = 0; k < 5; k++) {
+      for (int k = 0; k < 6; k++) {
         size_t olen = strlen(ops[k]);
         if (strncmp(p, ops[k], olen) == 0) {
           r.trigger       = types[k];
@@ -586,7 +586,7 @@ void MyMesh::scriptHandleCommand(const char* arg, char* reply) {
     }
 
     _scriptRules[_scriptRuleCount++] = r;
-    _scriptSave();
+    _scriptRulesDirty = true;  // deferred save — avoids blocking CLI on nRF52
     char at_reply[12] = "";
     if (r.at_hour != -1) snprintf(at_reply, sizeof(at_reply), " at:%02d:%02d", r.at_hour, r.at_minute);
     snprintf(reply, 160, "OK - rule %d added: %s/%us%s @%s:%s%s%s",
@@ -603,5 +603,5 @@ void MyMesh::scriptHandleCommand(const char* arg, char* reply) {
 
   // ── Unknown sub-command ───────────────────────────────────────────────────
   strcpy(reply,
-    "Err - usage: rule <add|list|del <n>|clear|test <n>|enable <n>|disable <n>>");
+    "Err - usage: report <add|list|del <n>|clear|test <n>|enable <n>|disable <n>>");
 }
