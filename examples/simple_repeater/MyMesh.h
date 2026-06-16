@@ -237,7 +237,7 @@ public:
 
   void handleCommand(uint32_t sender_timestamp, ClientInfo* sender, char* command, char* reply);
   void loop();
-  void scriptHandleCommand(const char* arg, char* reply);
+  void scriptHandleCommand(const char* arg, char* reply, ClientInfo* sender);
 
 #if defined(WITH_BRIDGE)
   void setBridgeState(bool enable) override {
