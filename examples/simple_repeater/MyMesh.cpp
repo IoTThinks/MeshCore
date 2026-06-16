@@ -1398,7 +1398,7 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, ClientInfo* sender, char *
     }
   } else if (strncmp(command, "filter", 6) == 0 && (command[6] == ' ' || command[6] == '\0')) {
     const char* filter_args = (command[6] == ' ') ? command + 7 : "";
-    _filter.handleCommand(filter_args, reply, *_fs);
+    _filter.handleCommand(filter_args, reply, *_fs, sender);
   } else {
     _cli.handleCommand(sender_timestamp, command, reply);  // common CLI commands
   }

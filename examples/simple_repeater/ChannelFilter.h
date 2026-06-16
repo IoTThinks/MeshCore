@@ -38,7 +38,7 @@ public:
 
     // Handle a "filter ..." command string (everything after "filter ").
     // Writes a human-readable result into 'reply' (assumed >= 80 bytes).
-    void handleCommand(const char* args, char* reply, FILESYSTEM& fs);
+    void handleCommand(const char* args, char* reply, FILESYSTEM& fs, ClientInfo* sender);
 
 private:
     FilterRule  _rules[MAX_FILTER_RULES];
@@ -56,5 +56,5 @@ private:
                      const mesh::Packet* pkt, int16_t rssi) const;
 
     // --- list command -------------------------------------------------------
-    void _listRules(char* reply, uint8_t page) const;
+    void _listRules(char* reply, uint8_t page, bool remote) const;
 };
