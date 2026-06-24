@@ -68,8 +68,8 @@ void RadioLibWrapper::doResetAGC() {
 }
 
 void RadioLibWrapper::resetAGC() {
-  // make sure we're not mid-receive of packet!
-  if ((state & STATE_INT_READY) != 0 || isReceivingPacket()) return;
+  // make sure we're not mid-receiving and mid-sending of packet!
+  if ((state & STATE_INT_READY) != 0 || isReceivingPacket() || (state == STATE_TX_WAIT)) return;
 
   doResetAGC();
   state = STATE_IDLE;   // trigger a startReceive()
