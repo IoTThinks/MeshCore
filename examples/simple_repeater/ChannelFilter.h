@@ -11,6 +11,11 @@
 // Persistence file path
 #define FILTER_RULES_FILE  "/filter_rules.bin"
 
+// magic  : 0xFC — identifies this as a valid filter rules file
+// version: 2    — current struct version; files with version < 2 are discarded
+#define FILTER_FILE_MAGIC    0xFC
+#define FILTER_FILE_VERSION  2
+
 // ---------------------------------------------------------------------------
 // ChannelFilter
 // ---------------------------------------------------------------------------

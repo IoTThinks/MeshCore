@@ -5,6 +5,8 @@
 
 // ---------------------------------------------------------------------------
 // Persistence layout (binary blob, fixed size):
+//   [uint8_t  magic   = FILTER_FILE_MAGIC]
+//   [uint8_t  version = FILTER_FILE_VERSION]
 //   [uint8_t  mode]
 //   [FilterRule * MAX_FILTER_RULES]
 // ---------------------------------------------------------------------------
@@ -28,6 +30,21 @@ void ChannelFilter::load(FILESYSTEM &fs) {
 #endif
   if (!f) return;
 
+  // Validate magic byte — old or corrupt file starts fresh
+  uint8_t magic;
+  if (f.read(&magic, 1) != 1 || magic != FILTER_FILE_MAGIC) {
+    f.close();
+    return;
+  }
+
+  // Validate version — discard files older than current version
+  uint8_t version;
+  if (f.read(&version, 1) != 1 || version < FILTER_FILE_VERSION) {
+    f.close();
+    return;
+  }
+
+  // Read mode byte
   uint8_t mode_byte;
   if (f.read(&mode_byte, 1) != 1) {
     f.close();
