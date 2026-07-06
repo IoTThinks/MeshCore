@@ -17,6 +17,9 @@ ChannelFilter::ChannelFilter() {
 // ---------------------------------------------------------------------------
 // Load / Save
 // ---------------------------------------------------------------------------
+// File format: [uint8_t magic=0xFC] [uint8_t version] [uint8_t mode] [FilterRule * MAX_FILTER_RULES]
+// If magic is missing or version < FILTER_FILE_VERSION, file is discarded and
+// a fresh default state is used. The file is not rewritten until the next save().
 
 void ChannelFilter::load(FILESYSTEM& fs) {
 #if defined(NRF52_PLATFORM) || defined(STM32_PLATFORM)
@@ -28,14 +31,28 @@ void ChannelFilter::load(FILESYSTEM& fs) {
 #endif
     if (!f) return;
 
+    // Validate magic byte
+    uint8_t magic;
+    if (f.read(&magic, 1) != 1 || magic != FILTER_FILE_MAGIC) {
+        f.close();
+        return;  // old or corrupt file — start fresh
+    }
+
+    // Validate version
+    uint8_t version;
+    if (f.read(&version, 1) != 1 || version < FILTER_FILE_VERSION) {
+        f.close();
+        return;  // outdated format — start fresh
+    }
+
+    // Read mode byte
     uint8_t mode_byte;
     if (f.read(&mode_byte, 1) != 1) { f.close(); return; }
-    // Validate mode byte — default to ALLOW if file is corrupt
     _mode = (mode_byte <= (uint8_t)FilterMode::DROP)
             ? (FilterMode)mode_byte
             : FilterMode::ALLOW;
 
-    // Check read length — if truncated, zero remaining slots (in_use=false = harmless)
+    // Read rules — if truncated, zero remaining slots (in_use=false = harmless)
     size_t bytes_read = f.read((uint8_t*)_rules, sizeof(_rules));
     if (bytes_read < sizeof(_rules)) {
         memset((uint8_t*)_rules + bytes_read, 0, sizeof(_rules) - bytes_read);
@@ -55,8 +72,8 @@ void ChannelFilter::save(FILESYSTEM& fs) const {
 #endif
     if (!f) return;
 
-    uint8_t mode_byte = (uint8_t)_mode;
-    f.write(&mode_byte, 1);
+    uint8_t header[3] = { FILTER_FILE_MAGIC, FILTER_FILE_VERSION, (uint8_t)_mode };
+    f.write(header, sizeof(header));
     f.write((const uint8_t*)_rules, sizeof(_rules));
     f.close();
 }

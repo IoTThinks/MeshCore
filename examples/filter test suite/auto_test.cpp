@@ -276,8 +276,8 @@ static void test_persistence() {
     ChannelFilter f1;
     char reply[160];
 
-    addRule(f1, "add drop payload eq grptxt", fs);  // rule 0 — enabled
-    addRule(f1, "add drop route eq tflood",   fs);  // rule 1 — enabled
+    addRule(f1, "add drop payload eq grptxt", fs);
+    addRule(f1, "add drop route eq tflood",   fs);
     f1.handleCommand("disable 0",             reply, fs);
     f1.handleCommand("mode drop",             reply, fs);
 
@@ -288,15 +288,54 @@ static void test_persistence() {
     mesh::Packet tflood = makePacket(ROUTE_TYPE_TRANSPORT_FLOOD, PAYLOAD_TYPE_TXT_MSG);
     mesh::Packet norm   = makePacket(ROUTE_TYPE_FLOOD,           PAYLOAD_TYPE_TXT_MSG);
 
-    // Rule 0 disabled — grptxt falls through to default policy (drop)
     CHECK("rule 0 disabled after reload -> grptxt drops (default policy)", f2.evaluate(&grptxt, -80));
-    CHECK("rule 1 active after reload   -> tflood drops",                   f2.evaluate(&tflood, -80));
-    CHECK("mode drop after reload       -> norm drops",                     f2.evaluate(&norm,   -80));
+    CHECK("rule 1 active after reload   -> tflood drops",                  f2.evaluate(&tflood, -80));
+    CHECK("mode drop after reload       -> norm drops",                    f2.evaluate(&norm,   -80));
 
-    // Verify disabled means rule is skipped — test with mode allow
     ChannelFilter f3;
     f3.handleCommand("add drop payload eq grptxt", reply, fs);  // added disabled
     CHECK("added disabled, mode allow -> grptxt passes", !f3.evaluate(&grptxt, -80));
+
+    section("Persistence — magic and version validation");
+
+    // Old format file: starts with mode byte (no magic)
+    MockFS fs_old;
+    {
+        uint8_t old_file[3] = { 0x00, 0x00, 0x00 };  // mode=allow + garbage, no magic
+        auto f = fs_old.open(FILTER_RULES_FILE, "w");
+        f.write(old_file, sizeof(old_file));
+        f.close();
+    }
+    ChannelFilter f_old;
+    f_old.load(fs_old);  // should discard — no magic
+    CHECK("old format (no magic) discarded -> mode defaults to allow", !f_old.evaluate(&norm, -80));
+
+    // File with correct magic but old version (1)
+    MockFS fs_v1;
+    {
+        uint8_t v1_file[3] = { 0xFC, 0x01, 0x01 };  // magic + version=1 + mode=drop
+        auto f = fs_v1.open(FILTER_RULES_FILE, "w");
+        f.write(v1_file, sizeof(v1_file));
+        f.close();
+    }
+    ChannelFilter f_v1;
+    f_v1.load(fs_v1);  // should discard — version < 2
+    CHECK("version 1 file discarded -> mode defaults to allow", !f_v1.evaluate(&norm, -80));
+
+    // Verify save writes correct magic and version
+    MockFS fs_save;
+    ChannelFilter f_save;
+    f_save.handleCommand("mode drop", reply, fs_save);
+    f_save.save(fs_save);
+    {
+        auto f = fs_save.open(FILTER_RULES_FILE, "r");
+        uint8_t magic = 0, version = 0;
+        f.read(&magic,   1);
+        f.read(&version, 1);
+        f.close();
+        CHECK("saved file has correct magic",   magic   == 0xFC);
+        CHECK("saved file has correct version", version == 2);
+    }
 }
 
 static void test_and_condition() {
