@@ -75,8 +75,8 @@ void ChannelFilter::save(FILESYSTEM &fs) const {
 #endif
   if (!f) return;
 
-  uint8_t mode_byte = (uint8_t)_mode;
-  f.write(&mode_byte, 1);
+  uint8_t header[3] = { FILTER_FILE_MAGIC, FILTER_FILE_VERSION, (uint8_t)_mode };
+  f.write(header, sizeof(header));
   f.write((const uint8_t *)_rules, sizeof(_rules));
   f.close();
 }
