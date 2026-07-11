@@ -9,12 +9,13 @@
 #include <MeshCore.h>
 
 // Persistence file path
-#define FILTER_RULES_FILE  "/filter_rules.bin"
+#define FILTER_RULES_FILE    "/filter_rules.bin"
 
+// File format: [magic] [version] [mode] [FilterRule * MAX_FILTER_RULES]
 // magic  : 0xFC — identifies this as a valid filter rules file
 // version: 2    — current struct version; files with version < 2 are discarded
 #define FILTER_FILE_MAGIC    0xFC
-#define FILTER_FILE_VERSION  2
+#define FILTER_FILE_VERSION  3
 
 // ---------------------------------------------------------------------------
 // ChannelFilter
@@ -43,7 +44,8 @@ public:
 
     // Handle a "filter ..." command string (everything after "filter ").
     // Writes a human-readable result into 'reply' (assumed >= 80 bytes).
-    void handleCommand(const char* args, char* reply, FILESYSTEM& fs, ClientInfo* sender);
+    // sender == nullptr means local Serial CLI; sender != nullptr means remote CLI (paginates output).
+    void handleCommand(const char* args, char* reply, FILESYSTEM& fs, ClientInfo* sender = nullptr);
 
 private:
     FilterRule  _rules[MAX_FILTER_RULES];
@@ -51,15 +53,11 @@ private:
 
     // --- Rule helpers -------------------------------------------------------
 
-    // Find the first free slot. Returns index or -1 if full.
     int  _firstFreeSlot() const;
-
-    // Evaluate a single rule against a packet + rssi.
-    // Returns true if the rule matches.
     bool _ruleMatches(const FilterRule& rule, const mesh::Packet* pkt, int16_t rssi) const;
     bool _evalScalar(FilterField field, FilterOp op, int16_t val,
                      const mesh::Packet* pkt, int16_t rssi) const;
 
     // --- list command -------------------------------------------------------
-    void _listRules(char* reply, uint8_t page, bool remote) const;
+    void _listRules(char* reply, uint8_t page, bool is_remote) const;
 };

@@ -85,7 +85,18 @@ static void test_parser() {
 
     r = parseFilterCommand("add drop channel eq 0xAB");
     CHECK("add drop channel eq 0xAB -> OK",           r.error == FilterParseError::OK);
-    CHECK("  channel value == 0xAB",                   r.rule.value == 0xAB);
+    CHECK("  channel_hash_count == 1",                 r.rule.channel_hash_count == 1);
+    CHECK("  channel_hashes[0] == 0xAB",               r.rule.channel_hashes[0] == 0xAB);
+
+    r = parseFilterCommand("add drop channel eq 0x11 0x22 0x33");
+    CHECK("channel OR-list 3 values -> OK",            r.error == FilterParseError::OK);
+    CHECK("  channel_hash_count == 3",                 r.rule.channel_hash_count == 3);
+    CHECK("  channel_hashes[0] == 0x11",               r.rule.channel_hashes[0] == 0x11);
+    CHECK("  channel_hashes[1] == 0x22",               r.rule.channel_hashes[1] == 0x22);
+    CHECK("  channel_hashes[2] == 0x33",               r.rule.channel_hashes[2] == 0x33);
+
+    r = parseFilterCommand("add drop channel eq 0x11 0x22 0x33 0x44 0x55");
+    CHECK("channel OR-list 5 values -> TOO_MANY_CHANNELS", r.error == FilterParseError::TOO_MANY_CHANNELS);
 
     r = parseFilterCommand("add drop path eq AB 12 CD");
     CHECK("add drop path eq AB 12 CD -> OK",          r.error == FilterParseError::OK);
@@ -229,6 +240,14 @@ static void test_evaluate() {
     CHECK("channel 0xCD -> PASS",   !f.evaluate(&chanCD, -80));
     f.handleCommand("clear", reply, fs);
 
+    section("Evaluate — channel OR-list");
+    addRule(f, "add drop channel eq 0xAB 0xCD 0xEF", fs);
+    mesh::Packet ch11 = makePacket(ROUTE_TYPE_FLOOD, PAYLOAD_TYPE_GRP_TXT, 0, 0x11);
+    CHECK("channel 0xAB in OR-list -> DROP",   f.evaluate(&chanAB, -80));
+    CHECK("channel 0xCD in OR-list -> DROP",   f.evaluate(&chanCD, -80));
+    CHECK("channel 0x11 not in OR-list -> PASS", !f.evaluate(&ch11, -80));
+    f.handleCommand("clear", reply, fs);
+
     section("Evaluate — path OR-match");
     addRule(f, "add drop path eq AB CD", fs);
     uint8_t hopAB[1] = {0xAB};
@@ -334,7 +353,7 @@ static void test_persistence() {
         f.read(&version, 1);
         f.close();
         CHECK("saved file has correct magic",   magic   == 0xFC);
-        CHECK("saved file has correct version", version == 2);
+        CHECK("saved file has correct version", version == 3);
     }
 }
 
@@ -348,7 +367,7 @@ static void test_and_condition() {
     auto r = parseFilterCommand("add drop channel eq 0x11 and hops gt 8");
     CHECK("AND parse -> OK",                           r.error == FilterParseError::OK);
     CHECK("  primary field  == CHANNEL",               r.rule.field    == FilterField::CHANNEL);
-    CHECK("  primary value  == 0x11",                  r.rule.value    == 0x11);
+    CHECK("  channel_hashes[0] == 0x11",               r.rule.channel_hashes[0] == 0x11);
     CHECK("  and_field      == HOPS",                  r.rule.and_field == (uint8_t)FilterField::HOPS);
     CHECK("  and_op         == GT",                    r.rule.and_op   == FilterOp::GT);
     CHECK("  and_value      == 8",                     r.rule.and_value == 8);
@@ -393,13 +412,13 @@ static void test_and_condition() {
 
     section("List — AND condition display");
 
-    f.handleCommand("add drop channel eq 0x11 and hops gt 8", reply, fs);  // list doesn't need enabled
-    f.handleCommand("list", reply, fs);
+    f.handleCommand("add drop channel eq 0x11 and hops gt 8", reply, fs, nullptr);
+    f.handleCommand("list", reply, fs, (ClientInfo*)1);  // remote = paginated
     CHECK("list shows 'and' keyword",   strstr(reply, "and") != nullptr);
     CHECK("list shows 'hops'",          strstr(reply, "hops") != nullptr);
     CHECK("list shows '8'",             strstr(reply, "8")    != nullptr);
     CHECK("list within 138 chars",      strlen(reply) <= 138);
-    f.handleCommand("clear", reply, fs);
+    f.handleCommand("clear", reply, fs, nullptr);
 }
 
 static void test_list_length() {

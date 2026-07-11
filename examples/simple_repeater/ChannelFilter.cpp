@@ -132,6 +132,36 @@ bool ChannelFilter::_ruleMatches(const FilterRule &rule, const mesh::Packet *pkt
     return true;
   }
 
+  // CHANNEL field has OR-list logic
+  if (rule.field == FilterField::CHANNEL) {
+    uint8_t pt = pkt->getPayloadType();
+    if (pt != 0x05 && pt != 0x06) return false;  // GRP_TXT / GRP_DATA only
+    if (pkt->payload_len < 1) return false;
+
+    uint8_t ch = pkt->payload[0];
+    bool found = false;
+    for (uint8_t i = 0; i < rule.channel_hash_count; i++) {
+      if (rule.channel_hashes[i] == ch) {
+        found = true;
+        break;
+      }
+    }
+
+    bool primary_match;
+    if (rule.op == FilterOp::EQ)       primary_match = found;
+    else if (rule.op == FilterOp::NEQ) primary_match = !found;
+    else return false;  // GT/LT not meaningful for channel OR-list
+
+    if (!primary_match) return false;
+
+    // AND condition for channel primary
+    if (rule.and_field != FILTER_FIELD_NONE) {
+      if (!_evalScalar((FilterField)rule.and_field, rule.and_op, rule.and_value, pkt, rssi))
+        return false;
+    }
+    return true;
+  }
+
   // Scalar primary condition
   if (!_evalScalar(rule.field, rule.op, rule.value, pkt, rssi)) return false;
 
@@ -164,6 +194,10 @@ bool ChannelFilter::_evalScalar(FilterField field, FilterOp op, int16_t val,
     uint8_t pt = pkt->getPayloadType();
     if (pt != 0x05 && pt != 0x06) return false;
     if (pkt->payload_len < 1) return false;
+    // OR-match against channel_hashes list — find the rule via pointer arithmetic
+    // Note: val is unused for CHANNEL — match logic uses the rule struct directly.
+    // This case should not be reached via _evalScalar for channel primary field.
+    // It remains here as a safety fallback using val as single-value compare.
     return applyOp(op, (int16_t)pkt->payload[0], val);
   }
 
@@ -312,7 +346,12 @@ static void formatRuleValue(const FilterRule &rule, char *out, int outlen) {
   } else if (rule.field == FilterField::TYPE) {
     snprintf(out, outlen, "%s", payloadTypeValueStr(rule.value));
   } else if (rule.field == FilterField::CHANNEL) {
-    snprintf(out, outlen, "0x%02X", (uint8_t)rule.value);
+    int pos = 0;
+    for (uint8_t i = 0; i < rule.channel_hash_count && pos < outlen - 1; i++) {
+      if (i > 0 && pos < outlen - 2) out[pos++] = ' ';
+      pos += snprintf(out + pos, outlen - pos, "0x%02X", rule.channel_hashes[i]);
+    }
+    out[pos] = '\0';
   } else if (rule.field == FilterField::SNR) {
     // Convert stored quarter-dB back to whole dB for display
     snprintf(out, outlen, "%d", (int)(rule.value / 4));

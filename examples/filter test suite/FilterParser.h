@@ -21,6 +21,8 @@ enum class FilterParseError : uint8_t {
     UNKNOWN_MODE,         // unrecognised mode token (expected allow/drop)
     AND_PATH_NOT_ALLOWED, // path field not supported as AND condition
     AND_DUPLICATE_FIELD,  // AND condition uses same field as primary condition
+    AND_CHANNEL_NOT_ALLOWED, // channel field not supported as AND condition
+    TOO_MANY_CHANNELS,    // more channel hashes than MAX_CHANNEL_HASHES
 };
 
 // ---------------------------------------------------------------------------

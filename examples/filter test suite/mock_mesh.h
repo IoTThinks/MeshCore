@@ -7,6 +7,13 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdarg.h>
+#include <string.h>
+#include <stdio.h>
+// ---------------------------------------------------------------------------
+
+#include <stdint.h>
+#include <stddef.h>
 #include <string.h>
 #include <stdio.h>
 
@@ -139,7 +146,20 @@ public:
     void clear()                  { _files.clear(); }
 };
 
-// Alias so ChannelFilter.cpp sees FILESYSTEM
+// Minimal Serial stub for local list output
+struct MockSerial {
+    void printf(const char* fmt, ...) {
+        va_list args;
+        va_start(args, fmt);
+        vprintf(fmt, args);
+        va_end(args);
+    }
+};
+inline MockSerial Serial;
+
+// Minimal ClientInfo stub — only used as a pointer (nullptr = local, non-null = remote)
+struct ClientInfo {};
+
 using FILESYSTEM = MockFS;
 // File type alias
 using File = MockFile;

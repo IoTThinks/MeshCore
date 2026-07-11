@@ -154,16 +154,10 @@ static bool parseScalarValue(const char* tok, FilterField field, int16_t& out) {
             out = (int16_t)v;
             return true;
         }
-        case FilterField::CHANNEL: {
-            uint8_t bytes[MAX_PATH_HASH_SIZE];
-            uint8_t len = parseHexBytes(tok, bytes);
-            if (len == 1) { out = bytes[0]; return true; }
-            char* end;
-            long v = strtol(tok, &end, 0);
-            if (*end != '\0' || v < 0 || v > 255) return false;
-            out = (int16_t)v;
-            return true;
-        }
+        case FilterField::CHANNEL:
+            // Channel OR-list is handled separately in parseAddCommand.
+            // parseScalarValue is only called for AND conditions — channel not allowed there.
+            return false;
         case FilterField::SNR: {
             char* end;
             long v = strtol(tok, &end, 0);
@@ -213,10 +207,8 @@ static FilterParseResult parseAddCommand(Tokenizer& tz) {
         uint8_t hashlen = 0;
 
         while (peekToken(tz, tok)) {
-            // Stop consuming hashes when we see the "and" keyword
             if (strcmp(tok, "and") == 0) break;
-
-            nextToken(tz, tok);  // consume
+            nextToken(tz, tok);
 
             if (count >= MAX_PATH_HASHES_PER_RULE) {
                 result.error = FilterParseError::TOO_MANY_HASHES;
@@ -249,6 +241,47 @@ static FilterParseResult parseAddCommand(Tokenizer& tz) {
         result.rule.path_hash_len   = hashlen;
         result.rule.path_hash_count = count;
 
+    } else if (result.rule.field == FilterField::CHANNEL) {
+        // CHANNEL: one or more space-separated hex byte tokens (OR-list)
+        // AND condition not supported when channel is primary field
+        uint8_t count = 0;
+
+        while (peekToken(tz, tok)) {
+            // Stop consuming hashes when we see the "and" keyword
+            if (strcmp(tok, "and") == 0) break;
+
+            nextToken(tz, tok);
+
+            if (count >= MAX_CHANNEL_HASHES) {
+                result.error = FilterParseError::TOO_MANY_CHANNELS;
+                return result;
+            }
+
+            // Accept 0xNN or NN (exactly 1 byte)
+            uint8_t bytes[MAX_PATH_HASH_SIZE];
+            uint8_t len = parseHexBytes(tok, bytes);
+            if (len == 1) {
+                result.rule.channel_hashes[count++] = bytes[0];
+            } else {
+                // Try plain decimal
+                char* end;
+                long v = strtol(tok, &end, 0);
+                if (*end != '\0' || v < 0 || v > 255) {
+                    result.error = FilterParseError::INVALID_HEX;
+                    return result;
+                }
+                result.rule.channel_hashes[count++] = (uint8_t)v;
+            }
+        }
+
+        if (count == 0) {
+            result.error = FilterParseError::MISSING_TOKEN;
+            return result;
+        }
+
+        result.rule.channel_hash_count = count;
+        // Channel OR-list parsed — fall through to AND condition parsing below
+
     } else {
         // Scalar field
         if (!nextToken(tz, tok)) { result.error = FilterParseError::MISSING_TOKEN; return result; }
@@ -267,15 +300,21 @@ static FilterParseResult parseAddCommand(Tokenizer& tz) {
         FilterField and_field;
         if (!parseField(tok, and_field)) { result.error = FilterParseError::UNKNOWN_FIELD; return result; }
 
+        // Duplicate field not allowed
+        if (and_field == result.rule.field) {
+            result.error = FilterParseError::AND_DUPLICATE_FIELD;
+            return result;
+        }
+
         // PATH not supported as AND condition
         if (and_field == FilterField::PATH) {
             result.error = FilterParseError::AND_PATH_NOT_ALLOWED;
             return result;
         }
 
-        // Duplicate field not allowed
-        if (and_field == result.rule.field) {
-            result.error = FilterParseError::AND_DUPLICATE_FIELD;
+        // CHANNEL not supported as AND condition
+        if (and_field == FilterField::CHANNEL) {
+            result.error = FilterParseError::AND_CHANNEL_NOT_ALLOWED;
             return result;
         }
 
@@ -401,8 +440,10 @@ const char* filterParseErrorStr(FilterParseError err) {
         case FilterParseError::TOO_MANY_HASHES:   return "Err - too many path hashes (max 4)";
         case FilterParseError::HASH_SIZE_MISMATCH:return "Err - mixed hash sizes in path rule";
         case FilterParseError::UNKNOWN_MODE:      return "Err - unknown mode (use: allow, drop)";
-        case FilterParseError::AND_PATH_NOT_ALLOWED: return "Err - path field not supported as AND condition";
-        case FilterParseError::AND_DUPLICATE_FIELD:  return "Err - AND condition cannot use same field as primary";
+        case FilterParseError::AND_PATH_NOT_ALLOWED:    return "Err - path field not supported as AND condition";
+        case FilterParseError::AND_DUPLICATE_FIELD:     return "Err - AND condition cannot use same field as primary";
+        case FilterParseError::AND_CHANNEL_NOT_ALLOWED: return "Err - channel field not supported as AND condition";
+        case FilterParseError::TOO_MANY_CHANNELS:       return "Err - too many channel hashes (max 4)";
         default:                                  return "Err - unknown error";
     }
 }

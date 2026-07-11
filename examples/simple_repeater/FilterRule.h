@@ -9,6 +9,7 @@
 #define MAX_FILTER_RULES          8
 #define MAX_PATH_HASHES_PER_RULE  4
 #define MAX_PATH_HASH_SIZE        3   // 1, 2 or 3 bytes per hash
+#define MAX_CHANNEL_HASHES        4   // OR-list for channel field
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -75,6 +76,12 @@ struct FilterRule {
     uint8_t path_hashes[MAX_PATH_HASHES_PER_RULE][MAX_PATH_HASH_SIZE];
     uint8_t path_hash_len;    // bytes per hash (1, 2 or 3) — same for all hashes in this rule
     uint8_t path_hash_count;  // number of valid hashes in path_hashes (1..MAX_PATH_HASHES_PER_RULE)
+
+    // CHANNEL field only: OR-list of channel hash bytes.
+    // Unused slots are zero-filled.
+    // AND condition is not supported when field == CHANNEL.
+    uint8_t channel_hashes[MAX_CHANNEL_HASHES];
+    uint8_t channel_hash_count;  // number of valid entries (1..MAX_CHANNEL_HASHES)
 
     bool enabled;  // false = rule is defined but temporarily inactive
     bool in_use;   // false = slot is empty

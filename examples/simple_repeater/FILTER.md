@@ -2,9 +2,7 @@
 
 The filter engine allows fine-grained control over which packets a repeater forwards. Rules are evaluated in order — the first matching rule wins. If no rule matches, the default policy (`mode`) applies.
 
-Rules survive reboot and are stored in `/filter_rules.bin`.
-
-> **Note:** The current rule file format does not include a version field. If you upgrade from a version without AND condition support, delete `/filter_rules.bin` and re-enter your rules.
+Rules survive reboot and are stored in `/filter_rules.bin`. The file includes a magic byte and version number — if the format changes between firmware versions, the file is automatically discarded and rules start fresh.
 
 ---
 
@@ -43,7 +41,7 @@ All commands are prefixed with `filter`.
 | `hops` | Number of hops the packet has travelled | `eq` `neq` `gt` `lt` |
 | `pathsize` | Hash size per hop entry in path (1–3 bytes) | `eq` `neq` `gt` `lt` |
 | `path` | Last hop repeater hash (OR-match against a list) | `eq` `neq` |
-| `channel` | Channel hash byte (GRP_TXT and GRP_DATA only) | `eq` `neq` |
+| `channel` | Channel hash byte — OR-list (GRP_TXT and GRP_DATA only) | `eq` `neq` |
 | `snr` | SNR of the received packet in whole dB | `eq` `neq` `gt` `lt` |
 | `rssi` | RSSI of the received packet in dBm | `eq` `neq` `gt` `lt` |
 
@@ -73,6 +71,7 @@ filter add <action> <field> <op> <value> and <field> <op> <value>
 **Restrictions:**
 - Maximum one AND condition per rule
 - `path` is not supported as the AND field (it can still be the primary field)
+- `channel` is not supported as the AND field (it can still be the primary field)
 - The AND field must be different from the primary field
 
 ---
@@ -110,13 +109,37 @@ Numeric values (decimal or hex) are also accepted for `payload`, e.g. `5` or `0x
 
 ### `path` values
 
-One or more hex strings separated by spaces. Each hash must be the same length — 2, 4 or 6 hex characters (1, 2 or 3 bytes). The size must match the hash size your network is configured to use. The rule matches if the last hop in the packet path equals **any** of the listed hashes (OR logic).
+One or more hex strings separated by spaces. Hash size is determined automatically from the number of hex characters:
+
+| Hex chars | Bytes | Example |
+|---|---|---|
+| 2 | 1 | `AB` |
+| 4 | 2 | `ABBA` |
+| 6 | 3 | `ABBA11` |
+
+All hashes in a single rule must be the same size — mixing sizes returns an error. The size must match the hash size your network is configured to use.
+
+The rule matches if the last hop in the packet path equals **any** of the listed hashes (OR logic).
+
+```
+filter add drop path eq AB              ← single 1-byte hash
+filter add drop path eq AB CD EF        ← any of three 1-byte hashes
+filter add drop path eq ABBA CDCD       ← any of two 2-byte hashes
+filter add drop path eq ABBA11 CDCD22   ← any of two 3-byte hashes
+```
 
 > `path` cannot be used as an AND field. It can only be the primary field.
 
 ### `channel` values
 
-A single hex byte with or without `0x` prefix, e.g. `0xAB` or `AB`. Only applies to `grptxt` and `grpdata` packets.
+One or more hex bytes separated by spaces, with or without `0x` prefix. The rule matches if the packet's channel hash equals **any** of the listed values (OR logic). Only applies to `grptxt` and `grpdata` packets.
+
+```
+filter add drop channel eq 0xAB              ← single channel
+filter add drop channel eq 0x81 0x11 0x22   ← any of these three channels
+```
+
+> `channel` cannot be used as an AND field. It can only be the primary field.
 
 ### `snr` values
 
@@ -156,7 +179,7 @@ mode:allow rules:6/8 p1/2
 ```
 mode:allow rules:6/8 p2/2
 3 allow path eq AB 12
-4 drop channel eq 0xAB and rssi lt -100
+4 drop channel eq 0x81 0x11 0x22 and hops gt 8
 5 drop rssi lt -110
 ```
 
@@ -208,7 +231,17 @@ filter add drop path eq AB 12 CD
 filter add drop channel eq 0xAB
 ```
 
-### Drop group messages on a specific channel only when more than 8 hops away
+### Drop packets on any of several channels
+```
+filter add drop channel eq 0x81 0x11 0x22
+```
+
+### Drop group messages on specific channels only when more than 8 hops away
+```
+filter add drop channel eq 0x81 0x11 0x22 and hops gt 8
+```
+
+### Drop group messages on a single channel only when more than 8 hops away
 ```
 filter add drop channel eq 0x11 and hops gt 8
 ```
@@ -275,5 +308,7 @@ filter mode allow
 | Maximum rules | 8 |
 | Maximum AND conditions per rule | 1 |
 | Maximum path hashes per rule | 4 |
-| Maximum path hash size | 3 bytes (2, 4 or 6 hex chars — must match the network's configured hash size) |
+| Maximum channel hashes per rule | 4 |
+| Path hash size | 1, 2 or 3 bytes (2, 4 or 6 hex chars) — all hashes in a rule must be the same size |
 | `path` as AND field | Not supported |
+| `channel` as AND field | Not supported |
