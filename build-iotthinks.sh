@@ -77,7 +77,7 @@ Xiao_nrf52_room_server
 ############# Companions BLE #############
 # NRF52 - 15 boards
 sh build.sh build-firmware \
-Heltec_t096_companion_radio_ble \
+Heltec_t096_companion_radio_ble_femon \
 Heltec_t096_companion_radio_ble_femoff \
 Heltec_t1_companion_radio_ble \
 Heltec_t114_companion_radio_ble \
@@ -123,7 +123,7 @@ Heltec_t096_companion_radio_usb
 ############# Sample builds #############
 # 14 boards
 sh build.sh build-firmware \
-Heltec_t096_companion_radio_ble \
+Heltec_t096_companion_radio_ble_femon \
 Heltec_t096_companion_radio_ble_femoff \
 Heltec_t096_repeater \
 Heltec_v3_companion_radio_ble_ps \
