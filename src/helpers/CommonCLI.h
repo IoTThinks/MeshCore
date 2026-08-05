@@ -19,18 +19,6 @@
 #define LOOP_DETECT_MODERATE  2
 #define LOOP_DETECT_STRICT    3
 
-#define RX_POWERSAVING_DEFAULT_RX_US     65625UL
-#define RX_POWERSAVING_DEFAULT_SLEEP_US  60000UL
-#define RX_POWERSAVING_MIN_PERIOD_US     1000UL
-#define RX_POWERSAVING_MAX_PERIOD_US     30000000UL
-
-// The named profiles are level presets pinned to a 16-symbol preamble: most
-// deployed senders still transmit 16-symbol preambles regardless of the newer
-// SF-based rule (32 for SF <= 8). Revisit once the field has largely migrated.
-#define RX_POWERSAVING_CONSERVATIVE_LEVEL 1UL
-#define RX_POWERSAVING_BALANCED_LEVEL     5UL
-#define RX_POWERSAVING_PROFILE_PREAMBLE   16UL
-
 struct NodePrefs { // persisted to file
   float airtime_factor;
   char node_name[32];
@@ -133,6 +121,7 @@ public:
     // no op by default
   };
 
+  // RX PowerSaving
   virtual bool setRxPowerSaving(bool enable, uint32_t rx_us, uint32_t sleep_us) {
     return !enable;
   };
