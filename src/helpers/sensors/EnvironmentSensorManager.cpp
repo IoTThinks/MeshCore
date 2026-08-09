@@ -200,16 +200,21 @@ public:
   void begin() override { }
   void stop() override { }
   void loop() override {
-    if (ublox_GNSS.getGnssFixOk(8)) {
-      _fix = true;
-      _lat = ublox_GNSS.getLatitude(2) / 10;
-      _lng = ublox_GNSS.getLongitude(2) / 10;
-      _alt = ublox_GNSS.getAltitude(2);
-      _sats = ublox_GNSS.getSIV(2);
-    } else {
-      _fix = false;
+    static long next_gps_update = 0;
+    if ((int32_t)(millis() - next_gps_update) >= 0) {
+      if (ublox_GNSS.getGnssFixOk(8)) {
+        _fix = true;
+        _lat = ublox_GNSS.getLatitude(2) / 10;
+        _lng = ublox_GNSS.getLongitude(2) / 10;
+        _alt = ublox_GNSS.getAltitude(2);
+        _sats = ublox_GNSS.getSIV(2);
+      } else {
+        _fix = false;
+      }
+      _epoch = ublox_GNSS.getUnixEpoch(2);
+
+      next_gps_update = millis() + 1000;
     }
-    _epoch = ublox_GNSS.getUnixEpoch(2);
   }
   bool isEnabled() override { return true; }
   void setPinEn(int pin_en) override { _pin_en = pin_en; }
@@ -882,9 +887,14 @@ void EnvironmentSensorManager::start_gps() {
   }
 
 #ifdef RAK_WISBLOCK_GPS
-    pinMode(gpsResetPin, OUTPUT);
-    digitalWrite(gpsResetPin, HIGH); // WB_IO2
-    return;
+#ifdef FORCE_GPS_ALIVE
+  // There is no UART command to enter power save for L76K
+  if (i2cGPSFlag) ublox_GNSS.powerSaveMode(false);
+#else
+  pinMode(gpsResetPin, OUTPUT);
+  digitalWrite(gpsResetPin, HIGH); // WB_IO2
+#endif
+  return;
 #endif
 
   _location->begin();
@@ -906,7 +916,10 @@ void EnvironmentSensorManager::stop_gps() {
   }
 
   #ifdef RAK_WISBLOCK_GPS
-  #ifndef FORCE_GPS_ALIVE
+  #ifdef FORCE_GPS_ALIVE
+    // There is no UART command to enter power save for L76K
+    if(i2cGPSFlag) ublox_GNSS.powerSaveMode(false);
+  #else
     pinMode(gpsResetPin, OUTPUT);
     digitalWrite(gpsResetPin, LOW); // WB_IO2
   #endif
