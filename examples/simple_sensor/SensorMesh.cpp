@@ -1,4 +1,5 @@
 #include "SensorMesh.h"
+#include "helpers/radiolib/RXPowerSaving.h"
 
 /* ------------------------------ Config -------------------------------- */
 
@@ -730,8 +731,8 @@ SensorMesh::SensorMesh(mesh::MainBoard& board, mesh::Radio& radio, mesh::Millise
   _prefs.flood_max = 64;
   _prefs.interference_threshold = 0;  // disabled
   _prefs.cad_enabled = 0;             // hardware CAD before TX (off by default; 'set cad on')
-  _prefs.rx_ps_rx_us = RX_POWERSAVING_DEFAULT_RX_US;
-  _prefs.rx_ps_sleep_us = RX_POWERSAVING_DEFAULT_SLEEP_US;
+  _prefs.rx_ps_rx_us = RX_POWERSAVING_DEFAULT_RX_US; // RX PowerSaving
+  _prefs.rx_ps_sleep_us = RX_POWERSAVING_DEFAULT_SLEEP_US; // RX PowerSaving
 
   // GPS defaults
   _prefs.gps_enabled = 0;
