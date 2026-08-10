@@ -1,4 +1,5 @@
 #include "MyMesh.h"
+#include "helpers/radiolib/RXPowerSaving.h"
 
 #define REPLY_DELAY_MILLIS          1500
 #define PUSH_NOTIFY_DELAY_MILLIS    2000
@@ -651,8 +652,8 @@ MyMesh::MyMesh(mesh::MainBoard &board, mesh::Radio &radio, mesh::MillisecondCloc
   _prefs.flood_max_advert = 8;
   _prefs.interference_threshold = 0; // disabled
   _prefs.cad_enabled = 0;            // hardware CAD before TX (off by default; 'set cad on')
-  _prefs.rx_ps_rx_us = RX_POWERSAVING_DEFAULT_RX_US;
-  _prefs.rx_ps_sleep_us = RX_POWERSAVING_DEFAULT_SLEEP_US;
+  _prefs.rx_ps_rx_us = RX_POWERSAVING_DEFAULT_RX_US; // RX PowerSaving
+  _prefs.rx_ps_sleep_us = RX_POWERSAVING_DEFAULT_SLEEP_US; // RX PowerSaving
 #ifdef ROOM_PASSWORD
   StrHelper::strncpy(_prefs.guest_password, ROOM_PASSWORD, sizeof(_prefs.guest_password));
 #endif

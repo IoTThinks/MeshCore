@@ -1,48 +1,54 @@
 # sh ./build-repeaters-iotthinks.sh
-export FIRMWARE_VERSION="PowerSaving16"
+export FIRMWARE_VERSION="PowerSaving17"
 
 ############# Repeaters #############
 # Commonly-used boards
-## ESP32 - 17 boards
+## ESP32 - 18 boards
 sh build.sh build-firmware \
+Heltec_ct62_repeater \
+Heltec_E290_repeater \
 Heltec_v3_repeater \
-Heltec_WSL3_repeater \
 heltec_v4_repeater \
+heltec_v4_r8_repeater \
+heltec_tracker_v2_repeater \
+Heltec_Wireless_Paper_repeater \
+Heltec_Wireless_Tracker_repeater \
+Heltec_WSL3_repeater \
+LilyGo_T3S3_sx1262_repeater \
+LilyGo_TBeam_1W_repeater \
 Station_G2_repeater \
 T_Beam_S3_Supreme_SX1262_repeater \
 Tbeam_SX1262_repeater \
-LilyGo_T3S3_sx1262_repeater \
-Xiao_S3_WIO_repeater \
+ThinkNode_M5_Repeater \
 Xiao_C3_repeater \
 Xiao_C6_repeater_ \
-Heltec_E290_repeater \
-Heltec_Wireless_Tracker_repeater \
-LilyGo_TBeam_1W_repeater \
 Xiao_S3_repeater \
-heltec_tracker_v2_repeater \
-Heltec_Wireless_Paper_repeater \
-Heltec_ct62_repeater
+Xiao_S3_WIO_repeater
 
-## NRF52 - 17 boards
+## NRF52 - 22 boards
 sh build.sh build-firmware \
-RAK_4631_repeater \
-Heltec_t114_repeater \
-Xiao_nrf52_repeater \
-Heltec_mesh_solar_repeater \
-ProMicro_repeater \
-SenseCap_Solar_repeater \
-t1000e_repeater \
-LilyGo_T-Echo_repeater \
-WioTrackerL1_repeater \
-RAK_3401_repeater \
-RAK_WisMesh_Tag_repeater \
 GAT562_30S_Mesh_Kit_repeater \
 GAT562_Mesh_Tracker_Pro_repeater \
+Heltec_mesh_solar_repeater \
+Heltec_t096_repeater \
+Heltec_t114_repeater \
+Heltec_t1_repeater \
 ikoka_nano_nrf_22dbm_repeater \
 ikoka_nano_nrf_30dbm_repeater \
 ikoka_nano_nrf_33dbm_repeater \
+LilyGo_T-Echo_Card_repeater \
+LilyGo_T-Echo_repeater \
+ProMicro_repeater \
+RAK_3401_repeater \
+RAK_4631_repeater \
+RAK_WisMesh_Tag_repeater \
+SenseCap_Solar_repeater \
+t1000e_repeater \
 ThinkNode_M1_repeater \
-Heltec_t096_repeater
+ThinkNode_M3_repeater \
+ThinkNode_M6_repeater \
+WioTrackerL1_repeater \
+Xiao_nrf52_repeater
 
 ## ESP32, SX1276 - 3 boards
 sh build.sh build-firmware \
@@ -51,85 +57,111 @@ LilyGo_TLora_V2_1_1_6_repeater \
 Tbeam_SX1276_repeater
 
 ############# Room Server #############
-# ESP32 - 7 boards
+# ESP32 - 8 boards
 sh build.sh build-firmware \
 Heltec_v3_room_server \
 heltec_v4_room_server \
-LilyGo_TBeam_1W_room_server \
-Heltec_WSL3_room_server \
-Xiao_S3_room_server \
+heltec_v4_r8_room_server \
 heltec_tracker_v2_room_server \
-Heltec_Wireless_Paper_room_server
+Heltec_Wireless_Paper_room_server \
+Heltec_WSL3_room_server \
+LilyGo_TBeam_1W_room_server \
+Xiao_S3_room_server
 
-# NRF52 - 6 boards
+# NRF52 - 7 boards
 sh build.sh build-firmware \
-RAK_4631_room_server \
+Heltec_t096_room_server \
 Heltec_t114_room_server \
-Xiao_nrf52_room_server \
+RAK_3401_room_server \
+RAK_4631_room_server \
 t1000e_room_server \
 WioTrackerL1_room_server \
-RAK_3401_room_server \
-Heltec_t096_room_server
+Xiao_nrf52_room_server
 
 ############# Companions BLE #############
-# NRF52 - 12 boards
+# NRF52 - 17 boards
 sh build.sh build-firmware \
-RAK_4631_companion_radio_ble \
+Heltec_t096_companion_radio_ble_femon \
+Heltec_t096_companion_radio_ble_femoff \
+Heltec_t1_companion_radio_ble \
 Heltec_t114_companion_radio_ble \
-Xiao_nrf52_companion_radio_ble \
-t1000e_companion_radio_ble \
+LilyGo_T-Echo_Card_companion_radio_ble \
 LilyGo_T-Echo_companion_radio_ble \
-WioTrackerL1_companion_radio_ble \
+ProMicro_companion_radio_ble \
 RAK_3401_companion_radio_ble \
+RAK_4631_companion_radio_ble \
 RAK_WisMesh_Tag_companion_radio_ble \
 SenseCap_Solar_companion_radio_ble \
+t1000e_companion_radio_ble \
 ThinkNode_M1_companion_radio_ble \
-Heltec_t096_companion_radio_ble \
-Heltec_t096_companion_radio_ble_femoff
+ThinkNode_M3_companion_radio_ble \
+ThinkNode_M6_companion_radio_ble \
+WioTrackerL1_companion_radio_ble \
+Xiao_nrf52_companion_radio_ble
 
 ############# Companions BLE PS #############
-# ESP32 - 18 boards
+# ESP32 - 21 boards
 sh build.sh build-firmware \
-Heltec_v3_companion_radio_ble_ps \
-heltec_v4_companion_radio_ble_ps \
-heltec_v4_3_companion_radio_ble_ps_femoff \
-Xiao_C3_companion_radio_ble_ps \
-Xiao_S3_companion_radio_ble_ps \
-Xiao_S3_WIO_companion_radio_ble_ps \
-Heltec_v2_companion_radio_ble_ps \
-LilyGo_TBeam_1W_companion_radio_ble_ps \
-Heltec_WSL3_companion_radio_ble_ps \
-Heltec_Wireless_Tracker_companion_radio_ble_ps \
-heltec_tracker_v2_companion_radio_ble_ps \
-Heltec_Wireless_Paper_companion_radio_ble_ps \
-LilyGo_TLora_V2_1_1_6_companion_radio_ble_ps \
 Heltec_ct62_companion_radio_ble_ps \
+heltec_tracker_v2_companion_radio_ble_ps \
+Heltec_v2_companion_radio_ble_ps \
+Heltec_v3_companion_radio_ble_ps \
+heltec_v4_3_companion_radio_ble_ps_femoff \
+heltec_v4_companion_radio_ble_ps_femon \
+heltec_v4_expansionkit_tft_companion_radio_ble_ps \
+heltec_v4_r8_companion_radio_ble_ps \
+Heltec_Wireless_Paper_companion_radio_ble_ps \
+Heltec_Wireless_Tracker_companion_radio_ble_ps \
+Heltec_WSL3_companion_radio_ble_ps \
+LilyGo_T3S3_sx1262_companion_radio_ble_ps \
+LilyGo_TBeam_1W_companion_radio_ble_ps \
+LilyGo_TLora_V2_1_1_6_companion_radio_ble_ps \
 T_Beam_S3_Supreme_SX1262_companion_radio_ble_ps \
 Tbeam_SX1262_companion_radio_ble_ps \
-heltec_v4_expansionkit_tft_companion_radio_ble_ps \
-LilyGo_T3S3_sx1262_companion_radio_ble_ps
-
-# Not working
 Tbeam_SX1276_companion_radio_ble_ps \
+ThinkNode_M5_companion_radio_ble_ps \
+Xiao_C3_companion_radio_ble_ps \
+Xiao_S3_companion_radio_ble_ps \
+Xiao_S3_WIO_companion_radio_ble_ps
 
 ############# Companions USB #############
 sh build.sh build-firmware \
-Heltec_t096_companion_radio_usb
+Heltec_t096_companion_radio_usb \
+heltec_v4_companion_radio_usb \
+heltec_v4_companion_radio_usb_ps_femoff \
+heltec_v4_companion_radio_usb_ps_femon
 
 ############# Sample builds #############
-# 14 boards
+# 24 boards
 sh build.sh build-firmware \
-Heltec_v3_repeater \
-heltec_v4_repeater \
-Xiao_C3_repeater \
-Xiao_C6_repeater_ \
-RAK_4631_repeater \
+Heltec_t096_companion_radio_ble_femon \
+Heltec_t096_companion_radio_ble_femoff \
+Heltec_t096_companion_radio_usb \
 Heltec_t096_repeater \
+Heltec_t114_companion_radio_ble \
+Heltec_t114_repeater \
 Heltec_v3_companion_radio_ble_ps \
-heltec_v4_companion_radio_ble_ps \
+Heltec_v3_repeater \
 heltec_v4_3_companion_radio_ble_ps_femoff \
-Xiao_C3_companion_radio_ble_ps \
-Xiao_C6_companion_radio_ble_ \
+heltec_v4_repeater \
+RAK_3401_companion_radio_ble \
+RAK_3401_repeater \
 RAK_4631_companion_radio_ble \
-Heltec_t096_companion_radio_ble \
-Heltec_t096_companion_radio_ble_femoff
+RAK_4631_repeater \
+SenseCap_Solar_companion_radio_ble \
+SenseCap_Solar_repeater \
+WioTrackerL1_companion_radio_ble \
+WioTrackerL1_repeater \
+Xiao_C3_companion_radio_ble_ps \
+Xiao_C3_repeater \
+Xiao_C6_companion_radio_ble_ \
+Xiao_C6_repeater_ \
+Xiao_nrf52_companion_radio_ble \
+Xiao_nrf52_repeater
+
+# 4 boards
+sh build.sh build-firmware \
+heltec_v4_companion_radio_ble_ps_femon \
+heltec_v4_companion_radio_usb \
+heltec_v4_companion_radio_usb_ps_femoff \
+heltec_v4_companion_radio_usb_ps_femon
