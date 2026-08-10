@@ -280,7 +280,9 @@ This document provides an overview of CLI commands that can be sent to MeshCore 
 #### View or change RX duty-cycle power saving
 **Usage:**
 - `get radio.rxps`
+- `get radio.rxps.rfrx_disabled`
 - `get rxps.wd`
+- `set radio.rxps.rfrx_disabled <state>`
 - `set radio.rxps off`
 - `set radio.rxps on`
 - `set radio.rxps conservative`
@@ -294,9 +296,13 @@ This document provides an overview of CLI commands that can be sent to MeshCore 
 - `rx_us`, `sleep_us`: Receive and sleep durations in microseconds (`1000`-`30000000`).
 - `level`: A power-saving level from `1` (most conservative) to `10` (least power saving).
 - `preamble`: LoRa preamble length in symbols; `16` or `32`.
+- `state`: `on` or `off`.
 
 **Notes:**
 - `get rxps.wd` reports the RXPS watchdog's soft and hard recovery counts.
+- `radio.rxps.rfrx_disabled` is a runtime-only diagnostic setting and resets to `off` after reboot.
+- Its default `off` state keeps the host-controlled SX1262 receive path enabled during RX duty-cycle mode. Setting it to `on` reproduces the old missing-RF_RX behavior and can significantly reduce receive sensitivity, making remote commands harder to receive.
+- `radio.rxps.rfrx_disabled` is supported only on SX1262 targets with a host-controlled RX enable pin.
 - `on` and `conservative` select level `1` with a 16-symbol preamble; `balanced` selects level `5` with a 16-symbol preamble.
 - Level-based settings automatically recalculate their timings when the spreading factor or bandwidth changes. Custom `<rx_us> <sleep_us>` timings remain fixed.
 - The selected mode is applied immediately, persisted, and restored after reboot.
