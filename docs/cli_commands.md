@@ -277,6 +277,38 @@ This document provides an overview of CLI commands that can be sent to MeshCore 
 
 ---
 
+#### View or change RX duty-cycle power saving
+**Usage:**
+- `get radio.rxps`
+- `get radio.rxps.rfrx_disabled`
+- `get rxps.wd`
+- `set radio.rxps.rfrx_disabled <state>`
+- `set radio.rxps off`
+- `set radio.rxps on`
+- `set radio.rxps conservative`
+- `set radio.rxps balanced`
+- `set radio.rxps <1-10>`
+- `set radio.rxps level <1-10>`
+- `set radio.rxps level <1-10> preamble <16|32>`
+- `set radio.rxps <rx_us> <sleep_us>`
+
+**Parameters:**
+- `rx_us`, `sleep_us`: Receive and sleep durations in microseconds (`1000`-`30000000`).
+- `level`: A power-saving level from `1` (most conservative) to `10` (least power saving).
+- `preamble`: LoRa preamble length in symbols; `16` or `32`.
+- `state`: `on` or `off`.
+
+**Notes:**
+- `get rxps.wd` reports the RXPS watchdog's soft and hard recovery counts.
+- `radio.rxps.rfrx_disabled` is a runtime-only diagnostic setting and resets to `off` after reboot.
+- Its default `off` state keeps the host-controlled SX1262 receive path enabled during RX duty-cycle mode. Setting it to `on` reproduces the old missing-RF_RX behavior and can significantly reduce receive sensitivity, making remote commands harder to receive.
+- `radio.rxps.rfrx_disabled` is supported only on SX1262 targets with a host-controlled RX enable pin.
+- `on` and `conservative` select level `1` with a 16-symbol preamble; `balanced` selects level `5` with a 16-symbol preamble.
+- Level-based settings automatically recalculate their timings when the spreading factor or bandwidth changes. Custom `<rx_us> <sleep_us>` timings remain fixed.
+- The selected mode is applied immediately, persisted, and restored after reboot.
+
+---
+
 #### View or change the LoRa FEM receive-path gain state on supported boards
 **Usage:**
 - `get radio.fem.rxgain`
@@ -458,6 +490,18 @@ This document provides an overview of CLI commands that can be sent to MeshCore 
 **Default:** `off`
 
 **Note:** When enabled, device enters sleep mode between radio transmissions
+
+---
+
+#### View or set reboot interval (Repeater and room server)
+**Usage:**
+- `get reboot.interval`
+- `set reboot.interval <hours>`
+
+**Parameters:** 
+- `hours`: 0-255. 0 is disabled
+
+**Default:** `0` (disabled)
 
 ---
 
@@ -818,6 +862,27 @@ This document provides an overview of CLI commands that can be sent to MeshCore 
 
 **Parameters:**
 - `name`: Region name,  or <null> to reset/clear
+
+---
+
+#### View or set the direct path override for the current remote client
+**Usage:**
+- `get outpath`
+- `set outpath <hop1_hex,hop2_hex,...>`
+- `set outpath direct`
+- `set outpath clear`
+- `set outpath flood`
+
+**Parameters:**
+- `hopN_hex`: Hop hash, `2`, `4`, or `6` hex characters. All hops must use the same width.
+
+**Notes:**
+- These commands require remote client context (they target the caller's ACL entry).
+- The path hash size is inferred from the hop hash width.
+- `outpath` overrides the primary direct route used for replies to the caller.
+- `direct` sets a zero-hop direct route for a caller reachable without repeaters.
+- `clear` forgets the current direct path and allows normal path discovery to repopulate it.
+- `flood` forces replies to use flood packets until the client logs in again.
 
 ---
 
