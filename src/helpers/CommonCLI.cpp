@@ -692,6 +692,23 @@ void CommonCLI::handleSetCmd(uint32_t sender_timestamp, char* command, char* rep
     } else {
       strcpy(reply, "Error: state must be on or off");
     }
+  } else if (strncmp(config, "radio.rxps.rfrx_disabled ", 25) == 0) {
+    const char* value = &config[25];
+    bool disabled;
+    if (strcmp(value, "on") == 0) {
+      disabled = true;
+    } else if (strcmp(value, "off") == 0) {
+      disabled = false;
+    } else {
+      strcpy(reply, "Error: state must be on or off");
+      return;
+    }
+
+    if (!_callbacks->setRxPowerSavingRfRxDisabled(disabled)) {
+      strcpy(reply, "Error: unsupported");
+    } else {
+      sprintf(reply, "OK - radio.rxps.rfrx_disabled %s", disabled ? "on" : "off");
+    }
   } else if (memcmp(config, "radio.rxps ", 11) == 0) { // RX PowerSaving
     const char* value = &config[11];
     uint8_t enable = _prefs->rx_powersaving_enabled;
@@ -1053,6 +1070,12 @@ void CommonCLI::handleGetCmd(uint32_t sender_timestamp, char* command, char* rep
       strcpy(reply, "Error: unsupported");
     } else {
       sprintf(reply, "> %s", _board->isLoRaFemLnaEnabled() ? "on" : "off");
+    }
+  } else if (strcmp(config, "radio.rxps.rfrx_disabled") == 0) {
+    if (!_callbacks->supportsRxPowerSavingRfRxDisable()) {
+      strcpy(reply, "Error: unsupported");
+    } else {
+      sprintf(reply, "> %s", _callbacks->isRxPowerSavingRfRxDisabled() ? "on" : "off");
     }
   } else if (memcmp(config, "radio.rxps", 10) == 0) { // RX PowerSaving
     ensureRxPowerSavingDefaults(&_prefs->rx_ps_rx_us, &_prefs->rx_ps_sleep_us);

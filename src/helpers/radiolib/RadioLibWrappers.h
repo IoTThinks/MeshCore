@@ -101,6 +101,9 @@ public:
   void onSendFinished() override;
   bool isInRecvMode() const override;
   bool setRxPowerSaving(bool enabled, uint32_t rx_us, uint32_t sleep_us) override;
+  virtual bool supportsRxPowerSavingRfRxDisable() const { return false; }
+  virtual bool setRxPowerSavingRfRxDisabled(bool) { return false; }
+  virtual bool isRxPowerSavingRfRxDisabled() const { return false; }
   bool isChannelActive();
 
   bool isReceiving() override {

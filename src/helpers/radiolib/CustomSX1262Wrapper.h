@@ -41,6 +41,29 @@ public:
 
   bool supportsRxPowerSaving() const override { return true; }
 
+  bool supportsRxPowerSavingRfRxDisable() const override {
+  #if defined(SX126X_RXEN)
+    return SX126X_RXEN != RADIOLIB_NC;
+  #else
+    return false;
+  #endif
+  }
+
+  bool setRxPowerSavingRfRxDisabled(bool disabled) override {
+    if (!supportsRxPowerSavingRfRxDisable()) return false;
+
+    if (_rx_ps_armed) stopReceiveDutyCycle();
+    ((CustomSX1262 *)_radio)->setRxPowerSavingRfRxDisabled(disabled);
+
+    // Re-arm the configured receive mode immediately without disturbing an
+    // unread RX interrupt or an in-flight transmission.
+    return setRxPowerSaving(_rx_ps_enabled, _rx_ps_rx_us, _rx_ps_sleep_us);
+  }
+
+  bool isRxPowerSavingRfRxDisabled() const override {
+    return ((CustomSX1262 *)_radio)->isRxPowerSavingRfRxDisabled();
+  }
+
 protected:
   int startReceiveMode() override {
     if (_rx_ps_armed) {

@@ -1077,6 +1077,23 @@ bool MyMesh::setRxPowerSaving(bool enable, uint32_t rx_us, uint32_t sleep_us) {
                      ok ? "" : " unsupported");
   return ok;
 }
+
+bool MyMesh::supportsRxPowerSavingRfRxDisable() const {
+  return radio_driver.supportsRxPowerSavingRfRxDisable();
+}
+
+bool MyMesh::setRxPowerSavingRfRxDisabled(bool disabled) {
+  bool ok = radio_driver.setRxPowerSavingRfRxDisabled(disabled);
+  MESH_DEBUG_PRINTLN("RX Power Saving RF_RX control: %s, %s",
+                     disabled ? "disabled" : "enabled",
+                     ok ? "accepted" : "unsupported");
+  return ok;
+}
+
+bool MyMesh::isRxPowerSavingRfRxDisabled() const {
+  return radio_driver.isRxPowerSavingRfRxDisabled();
+}
+
 void MyMesh::getRxPsWatchdogCounts(uint32_t* soft, uint32_t* hard) {
   *soft = radio_driver.getRxPsWatchdogSoftCount();
   *hard = radio_driver.getRxPsWatchdogHardCount();

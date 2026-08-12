@@ -126,6 +126,13 @@ public:
     return !enable;
   };
 
+  virtual bool supportsRxPowerSavingRfRxDisable() const { return false; }
+  virtual bool setRxPowerSavingRfRxDisabled(bool disabled) {
+    (void)disabled;
+    return false;
+  }
+  virtual bool isRxPowerSavingRfRxDisabled() const { return false; }
+
   virtual void getRxPsWatchdogCounts(uint32_t* soft, uint32_t* hard) {
     *soft = 0; *hard = 0;
   };

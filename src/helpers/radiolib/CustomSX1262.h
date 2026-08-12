@@ -6,6 +6,8 @@
 #define SX126X_IRQ_PREAMBLE_DETECTED           0x04
 
 class CustomSX1262 : public SX1262 {
+  bool _rx_ps_rf_rx_disabled = false;
+
   public:
     CustomSX1262(Module *mod) : SX1262(mod) { }
 
@@ -84,6 +86,27 @@ class CustomSX1262 : public SX1262 {
   #endif
 
       return true;  // success
+    }
+
+    int16_t startReceiveDutyCycle(uint32_t rxPeriod, uint32_t sleepPeriod,
+                                  RadioLibIrqFlags_t irqFlags = RADIOLIB_IRQ_RX_DEFAULT_FLAGS,
+                                  RadioLibIrqFlags_t irqMask = RADIOLIB_IRQ_RX_DEFAULT_MASK) {
+      int16_t state = SX1262::startReceiveDutyCycle(rxPeriod, sleepPeriod, irqFlags, irqMask);
+      if (state == RADIOLIB_ERR_NONE && !_rx_ps_rf_rx_disabled) {
+        // RadioLib stages RX duty-cycle through standby, which leaves a
+        // host-controlled RXEN switch in IDLE. Keep the receive path enabled
+        // while the SX1262 alternates between its RX and sleep windows.
+        this->mod->setRfSwitchState(Module::MODE_RX);
+      }
+      return state;
+    }
+
+    void setRxPowerSavingRfRxDisabled(bool disabled) {
+      _rx_ps_rf_rx_disabled = disabled;
+    }
+
+    bool isRxPowerSavingRfRxDisabled() const {
+      return _rx_ps_rf_rx_disabled;
     }
 
     // BUSY high means the chip is asleep (RX duty-cycle sleep window) or mid
