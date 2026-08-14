@@ -296,9 +296,11 @@ void loop() {
 #if defined(NRF52_PLATFORM)
     board.sleep(0); // nrf ignores seconds param, sleeps whenever possible
 #elif defined(ESP32_PLATFORM)
+#if defined(BLE_PIN_CODE)
     if (!bluetooth_interface.isReadBusy() && !bluetooth_interface.isWriteBusy()) { // BLE is not busy
       vTaskDelay(pdMS_TO_TICKS(10));  // attempt to sleep
     }
+#endif
 #endif
   }
 
