@@ -163,6 +163,13 @@ protected:
 
 #if ENV_INCLUDE_GPS == 1
   void applyGpsPrefs() {
+    // If powersaving on, apply powersaving to sensors
+    if (_prefs.powersaving_enabled) {
+      sensors.powersaving_enabled = true;
+    } else {
+      sensors.powersaving_enabled = false;
+    }
+
     sensors.setSettingValue("gps", _prefs.gps_enabled?"1":"0");
   }
 #endif
@@ -227,7 +234,8 @@ public:
   void saveIdentity(const mesh::LocalIdentity& new_id) override;
   void clearStats() override;
 
-  void handleCommand(uint32_t sender_timestamp, char* command, char* reply);
+  // Outpath PR
+  void handleCommand(uint32_t sender_timestamp, ClientInfo* sender, char* command, char* reply);
   void loop();
 
 #if defined(WITH_BRIDGE)
