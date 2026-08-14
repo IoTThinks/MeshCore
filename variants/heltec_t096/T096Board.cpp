@@ -122,6 +122,10 @@ const char* T096Board::getManufacturerName() const {
 }
 
 bool T096Board::setLoRaFemLnaEnabled(bool enable) {
+#if defined(RADIO_FEM_RXGAIN) && (RADIO_FEM_RXGAIN == 0)
+  enable = false;
+#endif
+
   if (!loRaFEMControl.isLnaCanControl()) {
     return false;
   }
