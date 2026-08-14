@@ -188,6 +188,10 @@ size_t SerialBLEInterface::writeFrame(const uint8_t src[], size_t len) {
 
 #define  BLE_WRITE_MIN_INTERVAL   60
 
+bool SerialBLEInterface::isReadBusy() const {
+  return uxQueueMessagesWaiting(recv_queue) > 0; // Kevin
+}
+
 bool SerialBLEInterface::isWriteBusy() const {
   return millis() < _last_write + BLE_WRITE_MIN_INTERVAL;   // still too soon to start another write?
 }
