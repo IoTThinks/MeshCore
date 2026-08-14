@@ -37,6 +37,15 @@
 #define BRIDGE_DEBUG_PRINTLN(...) {}
 #endif
 
+#if POWERSAVING_DEBUG && ARDUINO
+  #include <Arduino.h>
+  #define POWERSAVING_DEBUG_PRINT(F, ...) Serial.printf("POWERSAVING: " F, ##__VA_ARGS__)
+  #define POWERSAVING_DEBUG_PRINTLN(F, ...) Serial.printf("POWERSAVING: " F "\n", ##__VA_ARGS__)
+#else
+  #define POWERSAVING_DEBUG_PRINT(...) {}
+  #define POWERSAVING_DEBUG_PRINTLN(...) {}
+#endif
+
 namespace mesh {
 
 #define  BD_STARTUP_NORMAL     0  // getStartupReason() codes
@@ -79,6 +88,8 @@ public:
   virtual const char* getResetReasonString(uint32_t reason) { return "Not available"; }
   virtual uint8_t getShutdownReason() const { return 0; }
   virtual const char* getShutdownReasonString(uint8_t reason) { return "Not available"; }
+
+  inline static uint32_t n_cad_busy = 0;
 };
 
 /**
