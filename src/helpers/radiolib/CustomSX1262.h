@@ -8,6 +8,7 @@ class CustomSX1262 : public SX1262 {
   uint32_t _maxPayloadMillis = 3934;
   uint32_t _activityAt = 0;
   bool _headerSeen = false;
+  bool _rx_ps_rf_rx_disabled = false;
 
   public:
     CustomSX1262(Module *mod) : SX1262(mod) { }
@@ -105,6 +106,31 @@ class CustomSX1262 : public SX1262 {
       return SX1262::startReceive(RADIOLIB_SX126X_RX_TIMEOUT_INF, RADIOLIB_IRQ_RX_DEFAULT_FLAGS | (1UL << RADIOLIB_IRQ_PREAMBLE_DETECTED), RADIOLIB_IRQ_RX_DEFAULT_MASK, 0);
     }
 
+    int16_t startReceiveDutyCycle(uint32_t rxPeriod, uint32_t sleepPeriod,
+                                  RadioLibIrqFlags_t irqFlags = RADIOLIB_IRQ_RX_DEFAULT_FLAGS,
+                                  RadioLibIrqFlags_t irqMask = RADIOLIB_IRQ_RX_DEFAULT_MASK) {
+      int16_t state = SX1262::startReceiveDutyCycle(rxPeriod, sleepPeriod, irqFlags, irqMask);
+      if (state == RADIOLIB_ERR_NONE && !_rx_ps_rf_rx_disabled) {
+        // RadioLib stages RX through standby, which leaves a host-controlled
+        // RXEN switch in IDLE. Set it back to RX for the whole duty-cycle;
+        // boards without an external RXEN table are unaffected.
+        this->mod->setRfSwitchState(Module::MODE_RX);
+      }
+      return state;
+    }
+
+    void setRxPowerSavingRfRxDisabled(bool disabled) {
+      _rx_ps_rf_rx_disabled = disabled;
+    }
+    bool isRxPowerSavingRfRxDisabled() const {
+      return _rx_ps_rf_rx_disabled;
+    }
+
+    bool isChipBusy() {
+      uint32_t busy = this->mod->getGpio();
+      return busy != RADIOLIB_NC && this->mod->hal->digitalRead(busy);
+    }
+
     bool isReceiving() {
       uint32_t irq = getIrqFlags();
       bool preamble = irq & RADIOLIB_SX126X_IRQ_PREAMBLE_DETECTED; // bit 2
@@ -146,6 +172,19 @@ class CustomSX1262 : public SX1262 {
       }
       _activityAt = 0; _headerSeen = false;
       return false;
+    }
+
+    int16_t stopRTC() {
+      uint8_t rtcStop = 0x00;
+      int16_t state = writeRegister(RADIOLIB_SX126X_REG_RTC_CTRL, &rtcStop, 1);
+      RADIOLIB_ASSERT(state);
+
+      uint8_t rtcEvent = 0;
+      state = readRegister(RADIOLIB_SX126X_REG_EVENT_MASK, &rtcEvent, 1);
+      RADIOLIB_ASSERT(state);
+
+      rtcEvent |= 0x02;
+      return writeRegister(RADIOLIB_SX126X_REG_EVENT_MASK, &rtcEvent, 1);
     }
 
     void setPreambleMillis(uint32_t preambleMillis) {
