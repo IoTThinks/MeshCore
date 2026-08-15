@@ -2,6 +2,7 @@
 
 #include <Arduino.h> // needed for PlatformIO
 #include <Mesh.h>
+#include "helpers/radiolib/RXPowerSaving.h"
 
 #define CMD_APP_START                 1
 #define CMD_SEND_TXT_MSG              2
@@ -263,6 +264,33 @@ int MyMesh::getInterferenceThreshold() const {
 }
 bool MyMesh::getCADEnabled() const {
   return false; // hardware CAD before TX (disabled by default, until configurable)
+}
+
+static void applyCompanionRxPowerSaving(uint8_t sf, float bw) {
+#ifdef WRAPPER_CLASS
+  RxPowerSavingControl* control = &radio_driver;
+
+  // setRxPowerSaving() rejects out-of-range periods without touching the
+  // wrapper's state, so on any failure we must explicitly stand the duty cycle
+  // down. Otherwise it would stay armed with the *previous* SF/BW timings -
+  // e.g. SF5/BW500 yields rx=655us (below the 1ms minimum), and the radio would
+  // keep sleeping in windows sized for SF11, missing every preamble.
+  uint32_t rx_us = 0;
+  uint32_t sleep_us = 0;
+  bool ok = calcRxPowerSavingLevel(RX_POWERSAVING_BALANCED_LEVEL, sf, bw,
+                                   RX_POWERSAVING_PROFILE_PREAMBLE, &rx_us, &sleep_us) &&
+            control->setRxPowerSaving(true, rx_us, sleep_us);
+  if (!ok) {
+    control->setRxPowerSaving(false, RX_POWERSAVING_DEFAULT_RX_US,
+                              RX_POWERSAVING_DEFAULT_SLEEP_US);
+  }
+  MESH_DEBUG_PRINTLN("RX Power Saving: companion level=5,preamble=16,rx=%lu,sleep=%lu,%s",
+                     (unsigned long)rx_us, (unsigned long)sleep_us,
+                     ok ? "accepted" : "unavailable - continuous RX");
+#else
+  (void)sf;
+  (void)bw;
+#endif
 }
 
 int MyMesh::calcRxDelay(float score, uint32_t air_time) const {
@@ -980,6 +1008,7 @@ void MyMesh::begin(bool has_display) {
   board.setLoRaFemPaGainEnabled(_prefs.radio_fem_txgain);
   MESH_DEBUG_PRINTLN("RX Boosted Gain Mode: %s",
                      radio_driver.getRxBoostedGainMode() ? "Enabled" : "Disabled");
+  applyCompanionRxPowerSaving(_prefs.sf, _prefs.bw);
 }
 
 const char *MyMesh::getNodeName() {
@@ -1403,6 +1432,7 @@ void MyMesh::handleCmdFrame(size_t len) {
       savePrefs();
 
       radio_driver.setParams(_prefs.freq, _prefs.bw, _prefs.sf, _prefs.cr);
+      applyCompanionRxPowerSaving(_prefs.sf, _prefs.bw);
       MESH_DEBUG_PRINTLN("OK: CMD_SET_RADIO_PARAMS: f=%d, bw=%d, sf=%d, cr=%d", freq, bw, (uint32_t)sf,
                          (uint32_t)cr);
 
@@ -2263,5 +2293,10 @@ bool MyMesh::advert() {
 
 // To check if there is pending work
 bool MyMesh::hasPendingWork() const {
-  return _mgr->getOutboundTotal() > 0 || dirty_contacts_expiry != 0;
+  bool calibration_active = false;
+#ifdef WRAPPER_CLASS
+  const RxPowerSavingControl* rxps_control = &radio_driver;
+  calibration_active = rxps_control->isRxPowerSavingCalibrationActive();
+#endif
+  return _mgr->getOutboundTotal() > 0 || dirty_contacts_expiry != 0 || calibration_active;
 }

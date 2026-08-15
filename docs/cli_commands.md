@@ -339,6 +339,72 @@ This document provides an overview of CLI commands that can be sent to MeshCore 
 
 ---
 
+#### View or change RX power saving
+**Usage:**
+- `get radio.rxps`
+- `set radio.rxps off`
+- `set radio.rxps on`
+- `set radio.rxps conservative`
+- `set radio.rxps balanced`
+- `set radio.rxps <level>`
+- `set radio.rxps level <level>`
+- `set radio.rxps level <level> preamble <symbols>`
+- `set radio.rxps <rx_us> <sleep_us>`
+
+**Parameters:**
+- `level`: `1-10`; higher levels use shorter receive windows and longer sleep windows.
+- `symbols`: `16` or `32` preamble symbols.
+- `rx_us`: receive-window duration in microseconds, `1000-30000000`.
+- `sleep_us`: radio sleep duration in microseconds, `1000-30000000`.
+
+**Repeater default:** `off`
+
+**Profiles:**
+- `on` and `conservative`: level 1 with a 16-symbol preamble.
+- `balanced`: level 5 with a 16-symbol preamble.
+- A numeric level, or `level <level>`, automatically uses 32 preamble symbols for SF5-SF8 and 16 for SF9-SF12.
+- `level <level> preamble <symbols>` explicitly fixes the preamble used in the calculation.
+- Explicit `rx_us sleep_us` values select manual timing (`level=0`).
+
+Level-based settings are recalculated after SF or bandwidth changes. Manual timings are not recalculated. Settings are persisted in `/prefs.json`. Companion firmware does not expose this text command and applies its fixed level 5 / preamble 16 profile at startup and after radio-parameter changes.
+
+`get radio.rxps` reports:
+
+```text
+desired=<on|off>,effective=<armed|continuous>,supported=<yes|no>,
+level=<0-10>,preamble=<0|16|32>,rx=<us>,sleep=<us>,
+err=<RadioLib error>,fail=<count>[,erx=<us>,eslp=<us>]
+```
+
+- `desired` is the saved user setting.
+- `effective=armed` means receive duty-cycle is active.
+- `effective=continuous` means RXPS is disabled, unsupported, or the last arm attempt fell back to continuous RX.
+- `fail` counts failed arm operations; each one falls back to continuous RX. `clear stats` resets both this total and the consecutive-failure backoff, granting three fresh arm attempts.
+- `erx` and `eslp` appear only when the driver had to clamp the requested periods, and report the effective periods after driver clamping. On LR1110 the RX window is stretched when `2*rx + sleep` would not cover the extended period Semtech requires, so the real duty cycle can be less economical than `rx`/`sleep` suggest.
+- RXPS is currently supported by the SX1262 and LR1110 wrappers. Other radios remain in continuous RX and reject attempts to enable RXPS.
+- There is intentionally no RXPS watchdog, watchdog command, or periodic recovery. Recovery is limited to the immediate continuous-RX fallback after an arm error. After 3 consecutive arm failures the node stops retrying on every RX restart and stays in continuous RX until the RXPS configuration is set again or `clear stats` grants a fresh set of attempts.
+- On boards with a host-controlled RXEN pin, the RF switch is held in receive mode for the whole duty cycle (otherwise the node would be deaf). An external LNA on that pin therefore stays biased during the sleep windows, so the real power saving is smaller than the `rx`/`sleep` ratio implies.
+
+---
+
+#### Disable the host-controlled RF receive switch during RX power saving
+**Usage:**
+- `get radio.rxps.rfrx_disabled`
+- `set radio.rxps.rfrx_disabled <state>`
+
+**Parameters:**
+- `state`: `on`|`off`
+
+**Default:** `off`
+
+**Notes:**
+- This is a runtime-only diagnostic setting and resets to `off` after reboot.
+- `on` reproduces the missing RF_RX assertion during SX1262 receive duty-cycle mode.
+- Supported only on SX1262 targets with a host-controlled RX enable pin.
+- Enabling it can significantly reduce receive sensitivity and make remote commands harder to receive.
+
+---
+
 ### System
 
 #### View or change this node's name
