@@ -3,6 +3,7 @@
 #include "TxtDataHelpers.h"
 #include "AdvertDataHelpers.h"
 #include "TxtDataHelpers.h"
+#include "radiolib/RXPowerSavingCLI.h"
 #include <RTClib.h>
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
@@ -654,6 +655,13 @@ void CommonCLI::handleSetCmd(uint32_t sender_timestamp, char* command, char* rep
     } else {
       strcpy(reply, "Error: state must be on or off");
     }
+  } else if (strncmp(config, "radio.rxps.rfrx_disabled ", 25) == 0) {
+    RXPowerSavingCLI::setRfRxDisabled(&config[25], _rxps_control, reply, 160);
+  } else if (memcmp(config, "radio.rxps ", 11) == 0) {
+    if (RXPowerSavingCLI::set(&config[11], _prefs->sf, _prefs->bw, &_prefs->rxps,
+                              _rxps_control, reply, 160)) {
+      savePrefs();
+    }
   } else if (memcmp(config, "radio ", 6) == 0) {
     strcpy(tmp, &config[6]);
     const char *parts[4];
@@ -667,8 +675,11 @@ void CommonCLI::handleSetCmd(uint32_t sender_timestamp, char* command, char* rep
       _prefs->cr = cr;
       _prefs->freq = freq;
       _prefs->bw = bw;
+      bool rxps_retuned = recalcRxPowerSavingFromLevel(
+          _prefs->rxps.level, _prefs->sf, _prefs->bw, _prefs->rxps.preamble,
+          &_prefs->rxps.rx_us, &_prefs->rxps.sleep_us);
       _callbacks->savePrefs();
-      strcpy(reply, "OK - reboot to apply");
+      strcpy(reply, rxps_retuned ? "OK - reboot to apply (rxps retuned)" : "OK - reboot to apply");
     } else {
       strcpy(reply, "Error, invalid radio params");
     }
@@ -938,6 +949,10 @@ void CommonCLI::handleGetCmd(uint32_t sender_timestamp, char* command, char* rep
     } else {
       sprintf(reply, "> %s", _board->isLoRaFemPaGainEnabled() ? "on" : "off");
     }
+  } else if (strcmp(config, "radio.rxps.rfrx_disabled") == 0) {
+    RXPowerSavingCLI::getRfRxDisabled(_rxps_control, reply, 160);
+  } else if (strcmp(config, "radio.rxps") == 0) {
+    RXPowerSavingCLI::get(&_prefs->rxps, _rxps_control, reply, 160);
   } else if (memcmp(config, "radio", 5) == 0) {
     char freq[16], bw[16];
     strcpy(freq, StrHelper::ftoa(_prefs->freq));
