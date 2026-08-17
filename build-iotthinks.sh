@@ -127,16 +127,14 @@ Xiao_S3_WIO_companion_radio_ble
 ############# Companions USB #############
 sh build.sh build-firmware \
 Heltec_t096_companion_radio_usb \
-heltec_v4_companion_radio_usb \
 heltec_v4_companion_radio_usb_femoff \
 heltec_v4_companion_radio_usb_femon
 
 ############# Sample builds #############
-# 24 boards
+# 23 boards
 sh build.sh build-firmware \
 Heltec_t096_companion_radio_ble_femon \
 Heltec_t096_companion_radio_ble_femoff \
-Heltec_t096_companion_radio_usb \
 Heltec_t096_repeater \
 Heltec_t114_companion_radio_ble \
 Heltec_t114_repeater \
@@ -159,10 +157,9 @@ Xiao_C6_repeater_ \
 Xiao_nrf52_companion_radio_ble \
 Xiao_nrf52_repeater
 
-# 4 boards
+# 3 boards
 sh build.sh build-firmware \
-heltec_v4_companion_radio_ble_femon \
-heltec_v4_companion_radio_usb \
+Heltec_t096_companion_radio_usb \
 heltec_v4_companion_radio_usb_femoff \
 heltec_v4_companion_radio_usb_femon
 
