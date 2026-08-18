@@ -43,7 +43,10 @@ protected:
   void idle();
   void startRecv();
   void requestRestartRecv();
+  bool isPacketPendingOrReceiving();
   void prepareForRadioConfig();
+  void sampleNoiseFloorOnce();
+  bool publishNoiseFloor();
   void noiseFloorCalibCheck();
   void endNoiseFloorCalib(unsigned long now);
   int16_t startReceiveMode();
