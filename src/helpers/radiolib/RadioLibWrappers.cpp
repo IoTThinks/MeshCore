@@ -83,7 +83,7 @@ void RadioLibWrapper::doResetAGC() {
 
 void RadioLibWrapper::resetAGC() {
   // make sure we're not mid-receive or mid-transmit of a packet
-  if ((state & STATE_INT_READY) != 0 || isReceivingPacket() || state == STATE_TX_WAIT) return;
+  if (isPacketPendingOrReceiving() || state == STATE_TX_WAIT) return;
 
   if (_rx_ps_armed) stopReceiveDutyCycle();
 
@@ -107,8 +107,7 @@ void RadioLibWrapper::resetAGC() {
     uint16_t sample_attempts = 0;
     while (_num_floor_samples < NUM_NOISE_FLOOR_SAMPLES &&
            sample_attempts++ < NF_CALIB_MAX_SAMPLE_ATTEMPTS) {
-      if ((state & STATE_INT_READY) != 0) break;
-      if (isReceivingPacket()) {
+      if (isPacketPendingOrReceiving()) {
         packet_in_progress = true;
         break;
       }
@@ -131,9 +130,7 @@ void RadioLibWrapper::resetAGC() {
   // A frame can start after resetAGC()'s initial idle check. Keep continuous
   // RX alive until recvRaw() consumes it; restarting RX here would abort a
   // frame that is between preamble detection and RX_DONE.
-  if (!packet_in_progress && (state & STATE_INT_READY) == 0) {
-    packet_in_progress = isReceivingPacket();
-  }
+  if (!packet_in_progress) packet_in_progress = isPacketPendingOrReceiving();
   if (!packet_in_progress) requestRestartRecv();
 }
 
@@ -172,28 +169,35 @@ void RadioLibWrapper::requestRestartRecv() {
   interrupts();
 }
 
+bool RadioLibWrapper::isPacketPendingOrReceiving() {
+  return (state & STATE_INT_READY) != 0 || isReceivingPacket();
+}
+
 void RadioLibWrapper::noiseFloorCalibCheck() {
   unsigned long now = millis();
   if (_nf_calib_active) {
     if (!_rx_ps_enabled || (long)(now - _nf_calib_deadline) >= 0) {
       endNoiseFloorCalib(now);
+    } else if (_rx_ps_armed && !isPacketPendingOrReceiving()) {
+      // A packet may have delayed the RXPS-to-continuous-RX transition.
+      requestRestartRecv();
     }
   } else if (_rx_ps_enabled && _rx_ps_armed && state == STATE_RX &&
              (_nf_last_calib == 0 || now - _nf_last_calib >= NF_CALIB_INTERVAL_MS) &&
-             !isReceivingPacket()) {
+             !isPacketPendingOrReceiving()) {
     _nf_calib_active = true;
     _nf_calib_deadline = now + NF_CALIB_TIMEOUT_MS;
     _nf_sample_from = now + NF_CALIB_SETTLE_MS;
     _num_floor_samples = 0;
     _floor_sample_sum = 0;
-    requestRestartRecv();
+    if (!isPacketPendingOrReceiving()) requestRestartRecv();
   }
 }
 
 void RadioLibWrapper::endNoiseFloorCalib(unsigned long now) {
   _nf_calib_active = false;
   _nf_last_calib = now;
-  requestRestartRecv();
+  if (!isPacketPendingOrReceiving()) requestRestartRecv();
 }
 
 void RadioLibWrapper::loop() {
@@ -222,6 +226,12 @@ void RadioLibWrapper::startRecv() {
 }
 
 int16_t RadioLibWrapper::startReceiveMode() {
+  // Periodic calibration switches RXPS to continuous RX. Re-check at the
+  // hardware transition so a preamble that arrived after the scheduler's
+  // idle check is not aborted by stopReceiveDutyCycle().
+  if (_nf_calib_active && _rx_ps_armed && isPacketPendingOrReceiving()) {
+    return RADIOLIB_ERR_NONE;
+  }
   if (_rx_ps_armed) stopReceiveDutyCycle();
   if (!_rx_ps_enabled || _nf_calib_active) {
     _rx_ps_armed = false;
