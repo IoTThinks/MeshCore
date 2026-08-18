@@ -58,9 +58,7 @@ protected:
   }
 
   int16_t stopDutyCycleHardware() override {
-    int16_t standby_err = _radio->standby();
-    int16_t lf_err = ((CustomLR1110 *)_radio)->restoreLfClock();
-    return standby_err != RADIOLIB_ERR_NONE ? standby_err : lf_err;
+    return _radio->standby();
   }
 
 public:

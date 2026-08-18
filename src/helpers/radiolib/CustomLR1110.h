@@ -71,6 +71,8 @@ class CustomLR1110 : public LR1110 {
       int16_t state = standby(RADIOLIB_LR11X0_STANDBY_RC);
       RADIOLIB_ASSERT(state);
       // Semtech requires the RC standby/RTC setup before SetRxDutyCycle.
+      state = configLfClock(RADIOLIB_LR11X0_LF_CLK_RC | RADIOLIB_LR11X0_LF_BUSY_RELEASE_ENABLED);
+      RADIOLIB_ASSERT(state);
       RadioModeConfig_t cfg = {
         .receive = {
           .timeout = RADIOLIB_LR11X0_RX_TIMEOUT_INF,
@@ -79,23 +81,10 @@ class CustomLR1110 : public LR1110 {
           .len = 0,
         }
       };
-      return runRxPowerSavingArmTransaction(
-          [this]() {
-            return configLfClock(
-                RADIOLIB_LR11X0_LF_CLK_RC | RADIOLIB_LR11X0_LF_BUSY_RELEASE_ENABLED);
-          },
-          [this, &cfg]() {
-            return this->stageMode(RADIOLIB_RADIO_MODE_RX, &cfg);
-          },
-          [this, rxPeriodRaw, sleepPeriodRaw]() {
-            return this->setRxDutyCycle(
-                rxPeriodRaw, sleepPeriodRaw, RADIOLIB_LR11X0_RX_DUTY_CYCLE_MODE_RX);
-          },
-          [this]() {
-            // Preserve the arm error even if this best-effort rollback fails.
-            // A failed ConfigLfClock response may still mean the command ran.
-            restoreLfClock();
-          });
+
+      state = stageMode(RADIOLIB_RADIO_MODE_RX, &cfg);
+      RADIOLIB_ASSERT(state);
+      return setRxDutyCycle(rxPeriodRaw, sleepPeriodRaw, RADIOLIB_LR11X0_RX_DUTY_CYCLE_MODE_RX);
     }
 
     int16_t setRxBoostedGainMode(bool en) {

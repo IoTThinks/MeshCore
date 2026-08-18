@@ -29,29 +29,6 @@ public:
   uint8_t consecutiveFailures() const { return _consecutive_failures; }
 };
 
-// Runs the part of a hardware arm sequence that starts by changing persistent
-// radio configuration. Every failing step rolls that configuration back, while
-// the original arm error remains the result returned to the caller.
-template <typename Configure, typename Stage, typename Arm, typename Rollback>
-int16_t runRxPowerSavingArmTransaction(Configure configure, Stage stage,
-                                       Arm arm, Rollback rollback) {
-  int16_t state = configure();
-  if (state != 0) {
-    rollback();
-    return state;
-  }
-
-  state = stage();
-  if (state != 0) {
-    rollback();
-    return state;
-  }
-
-  state = arm();
-  if (state != 0) rollback();
-  return state;
-}
-
 struct RxPowerSavingConfig {
   uint8_t enabled = 0;
   uint32_t rx_us = RX_POWERSAVING_DEFAULT_RX_US;

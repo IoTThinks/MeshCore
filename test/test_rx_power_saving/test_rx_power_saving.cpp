@@ -89,44 +89,6 @@ TEST(RxPowerSaving, ClearingRetryStateGrantsThreeFreshAttempts) {
   EXPECT_EQ(retry.consecutiveFailures(), 0);
 }
 
-TEST(RxPowerSaving, ArmTransactionRollsBackEveryFailureAndPreservesItsError) {
-  for (int failing_step = 0; failing_step < 3; failing_step++) {
-    int calls[3] = {0, 0, 0};
-    int rollback_calls = 0;
-    auto step = [&](int index) -> int16_t {
-      calls[index]++;
-      return index == failing_step ? (int16_t)(-700 - index) : (int16_t)0;
-    };
-
-    int16_t result = runRxPowerSavingArmTransaction(
-        [&]() { return step(0); },
-        [&]() { return step(1); },
-        [&]() { return step(2); },
-        [&]() { rollback_calls++; });
-
-    EXPECT_EQ(result, -700 - failing_step);
-    EXPECT_EQ(rollback_calls, 1);
-    for (int index = 0; index < 3; index++) {
-      EXPECT_EQ(calls[index], index <= failing_step ? 1 : 0);
-    }
-  }
-}
-
-TEST(RxPowerSaving, ArmTransactionDoesNotRollBackSuccessfulArm) {
-  int step_calls = 0;
-  int rollback_calls = 0;
-
-  int16_t result = runRxPowerSavingArmTransaction(
-      [&]() -> int16_t { step_calls++; return 0; },
-      [&]() -> int16_t { step_calls++; return 0; },
-      [&]() -> int16_t { step_calls++; return 0; },
-      [&]() { rollback_calls++; });
-
-  EXPECT_EQ(result, 0);
-  EXPECT_EQ(step_calls, 3);
-  EXPECT_EQ(rollback_calls, 0);
-}
-
 TEST(RxPowerSaving, RejectsInvalidProfileInputs) {
   uint32_t rx_us = 0;
   uint32_t sleep_us = 0;
