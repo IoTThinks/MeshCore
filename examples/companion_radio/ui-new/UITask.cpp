@@ -143,13 +143,17 @@ class HomeScreen : public UIScreen {
     uptime_last_millis = now;
 
     uint64_t uptimeMinutes = uptime_millis / 60000ULL;
+
+    unsigned long days = uptimeMinutes / 1440;
+    unsigned long hours = (uptimeMinutes % 1440) / 60;
+    unsigned long minutes = uptimeMinutes % 60;
     char uptime[16];
-    if (uptimeMinutes < 60) {
-      snprintf(uptime, sizeof(uptime), "%lum", (unsigned long)uptimeMinutes);
-    } else if (uptimeMinutes < 1440) {
-      snprintf(uptime, sizeof(uptime), "%luh", (unsigned long)(uptimeMinutes / 60));
+    if (days > 0) {
+      snprintf(uptime, sizeof(uptime), "%lud %luh", days, hours);
+    } else if (hours > 0) {
+      snprintf(uptime, sizeof(uptime), "%luh %lum", hours, minutes);
     } else {
-      snprintf(uptime, sizeof(uptime), "%lud", (unsigned long)(uptimeMinutes / 1440));
+      snprintf(uptime, sizeof(uptime), "%lum", minutes);
     }
 
     display.setTextSize(1);
