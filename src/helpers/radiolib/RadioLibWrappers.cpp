@@ -14,6 +14,8 @@
 #define NF_CALIB_INTERVAL_MS 60000UL
 #define NF_CALIB_TIMEOUT_MS 5000UL
 #define NF_CALIB_SETTLE_MS 20UL
+#define NF_CALIB_SAMPLE_INTERVAL_MS 1UL
+#define NF_CALIB_MAX_SAMPLE_ATTEMPTS (NUM_NOISE_FLOOR_SAMPLES * 4U)
 
 static volatile uint8_t state = STATE_IDLE;
 
@@ -86,15 +88,76 @@ void RadioLibWrapper::resetAGC() {
   if (_rx_ps_armed) stopReceiveDutyCycle();
 
   doResetAGC();
-  state = STATE_IDLE;   // trigger a startReceive()
+  state = STATE_IDLE;
 
-  // Reset noise floor sampling so it reconverges from scratch.
-  // Without this, a stuck _noise_floor of -120 makes the sampling threshold
-  // too low (-106) to accept normal samples (~-105), self-reinforcing the
-  // stuck value even after the receiver has recovered.
+  // Recalibrate synchronously so callers never observe the temporary zero
+  // used to bypass a stale sampling threshold after an AGC reset.
+  const int16_t previous_noise_floor = _noise_floor;
   _noise_floor = 0;
   _num_floor_samples = 0;
   _floor_sample_sum = 0;
+
+  _nf_calib_active = true;  // force startReceiveMode() into continuous RX
+  bool packet_in_progress = false;
+  int16_t err = startReceiveMode();
+  if (err == RADIOLIB_ERR_NONE) {
+    state = STATE_RX;
+    delay(NF_CALIB_SETTLE_MS);
+
+    uint16_t sample_attempts = 0;
+    while (_num_floor_samples < NUM_NOISE_FLOOR_SAMPLES &&
+           sample_attempts++ < NF_CALIB_MAX_SAMPLE_ATTEMPTS) {
+      if ((state & STATE_INT_READY) != 0) break;
+      if (isReceivingPacket()) {
+        packet_in_progress = true;
+        break;
+      }
+      sampleNoiseFloorOnce();
+      if (_num_floor_samples < NUM_NOISE_FLOOR_SAMPLES) {
+        delay(NF_CALIB_SAMPLE_INTERVAL_MS);
+      }
+    }
+  }
+
+  if (!publishNoiseFloor()) {
+    _noise_floor = previous_noise_floor;
+    _num_floor_samples = 0;
+    _floor_sample_sum = 0;
+  }
+
+  _nf_calib_active = false;
+  _nf_last_calib = millis();
+
+  // A frame can start after resetAGC()'s initial idle check. Keep continuous
+  // RX alive until recvRaw() consumes it; restarting RX here would abort a
+  // frame that is between preamble detection and RX_DONE.
+  if (!packet_in_progress && (state & STATE_INT_READY) == 0) {
+    packet_in_progress = isReceivingPacket();
+  }
+  if (!packet_in_progress) requestRestartRecv();
+}
+
+void RadioLibWrapper::sampleNoiseFloorOnce() {
+  int rssi = getCurrentRSSI();
+  if (rssi < _noise_floor + SAMPLING_THRESHOLD) {
+    _num_floor_samples++;
+    _floor_sample_sum += rssi;
+  }
+}
+
+bool RadioLibWrapper::publishNoiseFloor() {
+  if (_num_floor_samples < NUM_NOISE_FLOOR_SAMPLES || _floor_sample_sum == 0) return false;
+
+  _noise_floor = _floor_sample_sum / NUM_NOISE_FLOOR_SAMPLES;
+  if (_noise_floor < -120) {
+    _noise_floor = -120;    // clamp to lower bound of -120dBi
+  }
+  _floor_sample_sum = 0;
+
+  #ifdef MESH_DEBUG_NOISE_FLOOR
+  MESH_DEBUG_PRINTLN("RadioLibWrapper: noise_floor = %d", (int)_noise_floor);
+  #endif
+  return true;
 }
 
 // Clear the RX/idle state so the next loop calls startRecv() again, without
@@ -139,23 +202,9 @@ void RadioLibWrapper::loop() {
   if (state == STATE_RX && _num_floor_samples < NUM_NOISE_FLOOR_SAMPLES) {
     if (!_rx_ps_armed && !(_nf_calib_active && (long)(millis() - _nf_sample_from) < 0) &&
         !isReceivingPacket()) {
-      int rssi = getCurrentRSSI();
-      if (rssi < _noise_floor + SAMPLING_THRESHOLD) {  // only consider samples below current floor + sampling THRESHOLD
-        _num_floor_samples++;
-        _floor_sample_sum += rssi;
-      }
+      sampleNoiseFloorOnce();
     }
-  } else if (_num_floor_samples >= NUM_NOISE_FLOOR_SAMPLES && _floor_sample_sum != 0) {
-    _noise_floor = _floor_sample_sum / NUM_NOISE_FLOOR_SAMPLES;
-    if (_noise_floor < -120) {
-      _noise_floor = -120;    // clamp to lower bound of -120dBi
-    }
-    _floor_sample_sum = 0;
-
-    #ifdef MESH_DEBUG_NOISE_FLOOR
-    MESH_DEBUG_PRINTLN("RadioLibWrapper: noise_floor = %d", (int)_noise_floor);
-    #endif
-
+  } else if (publishNoiseFloor()) {
     if (_nf_calib_active) endNoiseFloorCalib(millis());
   }
 }

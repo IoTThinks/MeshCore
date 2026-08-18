@@ -44,6 +44,8 @@ protected:
   void startRecv();
   void requestRestartRecv();
   void prepareForRadioConfig();
+  void sampleNoiseFloorOnce();
+  bool publishNoiseFloor();
   void noiseFloorCalibCheck();
   void endNoiseFloorCalib(unsigned long now);
   int16_t startReceiveMode();
