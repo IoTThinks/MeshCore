@@ -26,6 +26,9 @@ static char command[MAX_POST_TEXT_LEN+1];
 static char ethernet_command[MAX_POST_TEXT_LEN+1];
 #endif
 
+// For power saving
+unsigned long POWERSAVING_FIRSTSLEEP_SECS = 120; // The first sleep (if enabled) from boot
+
 void setup() {
   Serial.begin(115200);
   delay(1000);
