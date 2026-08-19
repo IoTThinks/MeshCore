@@ -265,11 +265,13 @@ void setup() {
 #endif
 
   // Configure Power Management
-  #if CONFIG_IDF_TARGET_ESP32C3 && defined(ENABLE_USB_INTERFACE)
-    pm_config = { .max_freq_mhz = 80, .min_freq_mhz = 40, .light_sleep_enable = false };
-  #else
-    pm_config = { .max_freq_mhz = 80, .min_freq_mhz = 40, .light_sleep_enable = true };
-  #endif
+#if defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT
+  // Disable automatic light sleep for USB CDC Serial
+  pm_config = { .max_freq_mhz = 80, .min_freq_mhz = 40, .light_sleep_enable = false };
+#else
+  pm_config = { .max_freq_mhz = 80, .min_freq_mhz = 40, .light_sleep_enable = true };
+#endif
+
   esp_err_t errPM = esp_pm_configure(&pm_config);
   if (errPM == ESP_OK) {
     Serial.println("Power Management configured successfully");
