@@ -137,6 +137,24 @@ class HomeScreen : public UIScreen {
     int iconY = 0;
     display.setColor(UIColor::title_txt);
 
+    // battery outline
+    display.drawRect(iconX, iconY, iconWidth, iconHeight);
+
+    // battery "cap"
+    display.fillRect(iconX + iconWidth, iconY + (iconHeight / 4), 3, iconHeight / 2);
+
+    // fill the battery based on the percentage
+    int fillWidth = (batteryPercentage * (iconWidth - 4)) / 100;
+    display.fillRect(iconX + 2, iconY + 2, fillWidth, iconHeight - 4);
+
+    // show muted icon if buzzer is muted
+#ifdef PIN_BUZZER
+    if (_task->isBuzzerQuiet()) {
+      display.setColor(UIColor::warning_txt);
+      display.drawXbm(iconX - 9, iconY + 1, muted_icon, 8, 8);
+    }
+#endif
+
     // Uptime
     uint32_t now = millis();
     uptime_millis += (uint32_t)(now - uptime_last_millis);
@@ -158,27 +176,10 @@ class HomeScreen : public UIScreen {
 
     display.setTextSize(1);
     int uptimeWidth = display.getTextWidth(uptime);
-    int spaceWidth = display.getTextWidth(" ");
-    display.setCursor(iconX - uptimeWidth - spaceWidth, iconY); // 1 extra space between uptime and battery icon
+    int uptimeX = display.width() - uptimeWidth - 2;
+    int uptimeY = iconY + iconHeight + 1;
+    display.setCursor(uptimeX, uptimeY);
     display.print(uptime);
-
-    // battery outline
-    display.drawRect(iconX, iconY, iconWidth, iconHeight);
-
-    // battery "cap"
-    display.fillRect(iconX + iconWidth, iconY + (iconHeight / 4), 3, iconHeight / 2);
-
-    // fill the battery based on the percentage
-    int fillWidth = (batteryPercentage * (iconWidth - 4)) / 100;
-    display.fillRect(iconX + 2, iconY + 2, fillWidth, iconHeight - 4);
-
-    // show muted icon if buzzer is muted
-#ifdef PIN_BUZZER
-    if (_task->isBuzzerQuiet()) {
-      display.setColor(UIColor::warning_txt);
-      display.drawXbm(iconX - 9, iconY + 1, muted_icon, 8, 8);
-    }
-#endif
   }
 
   CayenneLPP sensors_lpp;
@@ -241,7 +242,7 @@ public:
       display.setColor(UIColor::title_bkg);
     }
     int y = 14;
-    int x = display.width() / 2 - 5 * (HomePage::Count-1);
+    int x = 5;
     for (uint8_t i = 0; i < HomePage::Count; i++, x += 10) {
       if (i == _page) {
         display.fillRect(x-1, y-1, 4, 4);
