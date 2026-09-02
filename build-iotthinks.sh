@@ -1,9 +1,9 @@
 # sh ./build-repeaters-iotthinks.sh
-export FIRMWARE_VERSION="PowerSaving17.1"
+export FIRMWARE_VERSION="PowerSaving17.1.2"
 
 ############# Repeaters #############
 # Commonly-used boards
-## ESP32 - 20 boards
+## ESP32 - 21 boards
 sh build.sh build-firmware \
 Heltec_ct62_repeater \
 Heltec_E290_repeater \
@@ -17,6 +17,7 @@ Heltec_WSL3_repeater \
 MKE_s3_repeater \
 LilyGo_T3S3_sx1262_repeater \
 LilyGo_TBeam_1W_repeater \
+LilyGo_TDeck_repeater \
 Station_G2_repeater \
 T_Beam_S3_Supreme_SX1262_repeater \
 Tbeam_SX1262_repeater \
@@ -122,6 +123,7 @@ Heltec_WSL3_companion_radio_ble \
 MKE_s3_companion_radio_usb \
 LilyGo_T3S3_sx1262_companion_radio_ble \
 LilyGo_TBeam_1W_companion_radio_ble \
+LilyGo_TDeck_companion_radio_ble \
 LilyGo_TLora_V2_1_1_6_companion_radio_ble \
 T_Beam_S3_Supreme_SX1262_companion_radio_ble \
 Tbeam_SX1262_companion_radio_ble \
@@ -132,12 +134,15 @@ Xiao_S3_companion_radio_ble \
 Xiao_S3_WIO_companion_radio_ble
 
 ############# Companions USB #############
-# 8 boards
+# 10 boards
 sh build.sh build-firmware \
 Heltec_t096_companion_radio_usb \
+heltec_tracker_v2_companion_radio_usb_femoff \
+heltec_tracker_v2_companion_radio_usb_femon \
 heltec_v4_companion_radio_usb_femoff \
 heltec_v4_companion_radio_usb_femon \
 LilyGo_TBeam_1W_companion_radio_usb \
+LilyGo_TDeck_companion_radio_usb \
 LilyGo_T-Echo-Lite_non_shell_companion_radio_usb \
 Xiao_C3_companion_radio_usb \
 Xiao_S3_companion_radio_usb \
