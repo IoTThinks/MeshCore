@@ -395,7 +395,7 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, char* command, char* re
         bool enabled = l->isEnabled(); // is EN pin on ?
         bool fix = l->isValid();       // has fix ?
         int sats = l->satellitesCount();
-        bool active = !strcmp(_sensors->getSettingByKey("gps"), "1");
+        bool active = !strcmp(_sensors->getSettingByKey("gps") ?: "0", "1"); // Use "0" if GPS setting is not found
 
         if (_prefs->powersaving_enabled && l->isPowerSavingEnabled()) { // GPS Power Saving
           if (enabled) {
