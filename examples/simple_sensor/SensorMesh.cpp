@@ -979,3 +979,8 @@ void SensorMesh::loop() {
     dirty_contacts_expiry = 0;
   }
 }
+
+// To check if there is pending work
+bool SensorMesh::hasPendingWork() const {
+  return _mgr->getOutboundTotal() > 0;
+}

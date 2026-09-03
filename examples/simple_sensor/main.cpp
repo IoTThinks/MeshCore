@@ -52,6 +52,9 @@ void halt() {
 
 static char command[160];
 
+// For power saving
+unsigned long POWERSAVING_FIRSTSLEEP_SECS = 120; // The first sleep (if enabled) from boot
+
 void setup() {
   Serial.begin(115200);
   delay(1000);
@@ -166,4 +169,19 @@ void loop() {
 #ifdef HAS_EXTERNAL_WATCHDOG
   external_watchdog.loop();
 #endif
+
+  if (the_mesh.getNodePrefs()->powersaving_enabled && !the_mesh.hasPendingWork()) {
+#if defined(NRF52_PLATFORM)
+    board.sleep(0); // nrf ignores seconds param, sleeps whenever possible
+#else
+    if (the_mesh.millisHasNowPassed(POWERSAVING_FIRSTSLEEP_SECS * 1000)) { // To check if it is time to sleep
+      board.sleep(30); // Sleep. Wake up after a while or when receiving a LoRa packet
+    }
+#endif
+  }
+
+  if (the_mesh.getNodePrefs()->reboot_interval > 0 &&
+      the_mesh.millisHasNowPassed(the_mesh.getNodePrefs()->reboot_interval * 3600000)) {
+    board.reboot();
+  }
 }
