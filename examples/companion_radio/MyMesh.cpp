@@ -278,7 +278,9 @@ static void applyCompanionRxPowerSaving(uint8_t sf, float bw) {
   uint32_t rx_us = 0;
   uint32_t sleep_us = 0;
   bool ok = calcRxPowerSavingLevel(RX_POWERSAVING_BALANCED_LEVEL, sf, bw,
-                                   RX_POWERSAVING_PROFILE_PREAMBLE, &rx_us, &sleep_us) &&
+                                   RX_POWERSAVING_PROFILE_PREAMBLE, &rx_us, &sleep_us,
+                                   rxPowerSavingCaptureCost(control),
+                                   rxPowerSavingTransition(control)) &&
             control->setRxPowerSaving(true, rx_us, sleep_us);
   if (!ok) {
     control->setRxPowerSaving(false, RX_POWERSAVING_DEFAULT_RX_US,

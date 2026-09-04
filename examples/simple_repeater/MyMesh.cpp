@@ -11,8 +11,9 @@ static RxPowerSavingControl* getRxPowerSavingControl() {
 }
 
 static void applyRxPowerSavingConfig(NodePrefs& prefs, uint8_t sf, float bw) {
-  normalizeRxPowerSavingConfig(&prefs.rxps, sf, bw);
   RxPowerSavingControl* control = getRxPowerSavingControl();
+  normalizeRxPowerSavingConfig(&prefs.rxps, sf, bw, rxPowerSavingCaptureCost(control),
+                               rxPowerSavingTransition(control));
   bool ok = control != nullptr
       ? control->setRxPowerSaving(
             prefs.rxps.enabled != 0, prefs.rxps.rx_us, prefs.rxps.sleep_us)

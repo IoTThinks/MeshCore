@@ -2,16 +2,46 @@
 
 #include <RadioLib.h>
 #include "MeshCore.h"
+#include "RXPowerSaving.h"   // MC_TCXO_DELAY_US
 
 class CustomSX1262 : public SX1262 {
   uint32_t _preambleMillis = 66;
   uint32_t _maxPayloadMillis = 3934;
   uint32_t _activityAt = 0;
   bool _headerSeen = false;
-  bool _rx_ps_rf_rx_disabled = false;
 
   public:
+    // The sleep -> RX transition RadioLib subtracts from a duty-cycle sleep.
+    // Protected in the RadioLib base, so the RXPS layer reads it through here.
+    uint32_t getTcxoDelay() const { return tcxoDelay; }
+
     CustomSX1262(Module *mod) : SX1262(mod) { }
+
+    // RadioLib's begin() installs its own 5000 us TCXO startup delay and
+    // setTCXO() does not recalibrate, so MeshCore's value has to be written
+    // afterwards and the RC calibrations redone against the new clock-gating
+    // window. Overriding begin() puts that in one place: every variant reaches
+    // the radio through this class, whether it calls std_init() or begin()
+    // directly, so no target.cpp or variant .ini has to know about it.
+    int16_t begin(float freq = 434.0, float bw = 125.0, uint8_t sf = 9, uint8_t cr = 7,
+                  uint8_t syncWord = RADIOLIB_SX126X_SYNC_WORD_PRIVATE, int8_t power = 10,
+                  uint16_t preambleLength = 8, float tcxoVoltage = 1.6,
+                  bool useRegulatorLDO = false) {
+      int16_t state = SX1262::begin(freq, bw, sf, cr, syncWord, power, preambleLength,
+                                    tcxoVoltage, useRegulatorLDO);
+      if (state == RADIOLIB_ERR_NONE) applyMeshCoreTcxoDelay();
+      return state;
+    }
+
+    // Read tcxoVoltage back from the chip object rather than from the argument:
+    // begin() zeroes it when it falls back to an XTAL, and re-asserting a TCXO
+    // supply on DIO3 for a board that has none would be worse than a long delay.
+    void applyMeshCoreTcxoDelay() {
+      if (tcxoVoltage <= 0.0f) return;
+      setTCXO(tcxoVoltage, MC_TCXO_DELAY_US);
+      calibrate(RADIOLIB_SX126X_CALIBRATE_ALL);
+      delay(50);
+    }
 
   #ifdef RP2040_PLATFORM
     bool std_init(SPIClassRP2040* spi = NULL)
@@ -110,20 +140,13 @@ class CustomSX1262 : public SX1262 {
                                   RadioLibIrqFlags_t irqFlags = RADIOLIB_IRQ_RX_DEFAULT_FLAGS,
                                   RadioLibIrqFlags_t irqMask = RADIOLIB_IRQ_RX_DEFAULT_MASK) {
       int16_t state = SX1262::startReceiveDutyCycle(rxPeriod, sleepPeriod, irqFlags, irqMask);
-      if (state == RADIOLIB_ERR_NONE && !_rx_ps_rf_rx_disabled) {
+      if (state == RADIOLIB_ERR_NONE) {
         // RadioLib stages RX through standby, which leaves a host-controlled
         // RXEN switch in IDLE. Set it back to RX for the whole duty-cycle;
         // boards without an external RXEN table are unaffected.
         this->mod->setRfSwitchState(Module::MODE_RX);
       }
       return state;
-    }
-
-    void setRxPowerSavingRfRxDisabled(bool disabled) {
-      _rx_ps_rf_rx_disabled = disabled;
-    }
-    bool isRxPowerSavingRfRxDisabled() const {
-      return _rx_ps_rf_rx_disabled;
     }
 
     bool isChipBusy() {

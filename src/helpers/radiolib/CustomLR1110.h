@@ -14,6 +14,23 @@ class CustomLR1110 : public LR1110 {
   public:
     CustomLR1110(Module *mod) : LR1110(mod) { }
 
+    // See CustomSX1262::begin - same reasoning, LR11x0 flags and calibration.
+    int16_t begin(float freq = 434.0, float bw = 125.0, uint8_t sf = 9, uint8_t cr = 7,
+                  uint8_t syncWord = RADIOLIB_LR11X0_LORA_SYNC_WORD_PRIVATE, int8_t power = 10,
+                  uint16_t preambleLength = 8, float tcxoVoltage = 1.6) {
+      int16_t state = LR1110::begin(freq, bw, sf, cr, syncWord, power, preambleLength,
+                                    tcxoVoltage);
+      if (state == RADIOLIB_ERR_NONE) applyMeshCoreTcxoDelay();
+      return state;
+    }
+
+    void applyMeshCoreTcxoDelay() {
+      if (tcxoVoltage <= 0.0f) return;
+      setTCXO(tcxoVoltage, MC_TCXO_DELAY_US);
+      calibrate(0x3F);          // all blocks; setTCXO moved the gating window
+      delay(50);
+    }
+
     size_t getPacketLength(bool update) override {
       size_t len = LR1110::getPacketLength(update);
       if (len == 0 && getIrqStatus() & RADIOLIB_LR11X0_IRQ_HEADER_ERR) {
@@ -28,6 +45,10 @@ class CustomLR1110 : public LR1110 {
     }
     
     float getFreqMHz() const { return freqMHz; }
+
+    // The sleep -> RX transition RadioLib subtracts from a duty-cycle sleep.
+    // Protected in the RadioLib base, so the RXPS layer reads it through here.
+    uint32_t getTcxoDelay() const { return tcxoDelay; }
 
     // Restores the LF clock configuration RadioLib's begin() installs. Arming
     // the duty cycle switches it to RC + BUSY-release (required by Semtech for

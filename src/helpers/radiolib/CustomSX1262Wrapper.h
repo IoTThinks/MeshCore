@@ -10,6 +10,15 @@
 
 class CustomSX1262Wrapper : public RadioLibWrapper {
 public:
+  // Ask the radio rather than assume RadioLib's 5000 us default: startReceive-
+  // DutyCycle subtracts tcxoDelay + 1000 from the sleep and the register
+  // underflows below that, so the floor is a property of this board's TCXO. A
+  // board without one can duty cycle with a far shorter sleep. The 100 us on
+  // top clears the 15.625 us register tick that must remain.
+  uint32_t rxPowerSavingTransitionUs() const override {
+    return ((CustomSX1262 *)_radio)->getTcxoDelay() + 1000;
+  }
+
   CustomSX1262Wrapper(CustomSX1262& radio, mesh::MainBoard& board) : RadioLibWrapper(radio, board) { }
 
   void setParams(float freq, float bw, uint8_t sf, uint8_t cr) override {
@@ -50,25 +59,6 @@ public:
   }
 
   bool supportsRxPowerSaving() const override { return true; }
-
-  bool supportsRxPowerSavingRfRxDisable() const override {
-  #if defined(SX126X_RXEN)
-    return SX126X_RXEN != RADIOLIB_NC;
-  #else
-    return false;
-  #endif
-  }
-
-  bool setRxPowerSavingRfRxDisabled(bool disabled) override {
-    if (!supportsRxPowerSavingRfRxDisable()) return false;
-    prepareForRadioConfig();
-    ((CustomSX1262 *)_radio)->setRxPowerSavingRfRxDisabled(disabled);
-    return true;
-  }
-
-  bool isRxPowerSavingRfRxDisabled() const override {
-    return ((CustomSX1262 *)_radio)->isRxPowerSavingRfRxDisabled();
-  }
 
 protected:
   int16_t armDutyCycle(RadioLibIrqFlags_t irq_flags, RadioLibIrqFlags_t irq_mask,

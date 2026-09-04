@@ -93,9 +93,6 @@ public:
   virtual bool supportsRxPowerSaving() const { return false; }
   bool setRxPowerSaving(bool enabled, uint32_t rx_us, uint32_t sleep_us) override;
   RxPowerSavingStatus getRxPowerSavingStatus() const override;
-  virtual bool supportsRxPowerSavingRfRxDisable() const override { return false; }
-  virtual bool setRxPowerSavingRfRxDisabled(bool) override { return false; }
-  virtual bool isRxPowerSavingRfRxDisabled() const override { return false; }
   bool isRxPowerSavingCalibrationActive() const override { return _nf_calib_active; }
 
   bool isReceiving() override {
