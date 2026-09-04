@@ -6,6 +6,20 @@
 
 class CustomLR1110Wrapper : public RadioLibWrapper {
 public:
+  // Measured on ThinkNode M3 and T1000-E: this family needs roughly one symbol
+  // more margin than SX126x before a duty-cycled receiver latches a preamble.
+  float rxPowerSavingCaptureCostSymbols() const override {
+    return RX_POWERSAVING_CAPTURE_COST_SYMBOLS_LR11X0;
+  }
+
+  // Same reasoning as the SX126x wrapper. This family never showed either
+  // duty-cycle failure on the bench, which is unsurprising: its driver has
+  // always enforced an extended-period rule equivalent to the timer guard the
+  // SX126x side only just gained.
+  uint32_t rxPowerSavingTransitionUs() const override {
+    return ((CustomLR1110 *)_radio)->getTcxoDelay() + 1000;
+  }
+
   CustomLR1110Wrapper(CustomLR1110& radio, mesh::MainBoard& board) : RadioLibWrapper(radio, board) { }
 
   void setParams(float freq, float bw, uint8_t sf, uint8_t cr) override {

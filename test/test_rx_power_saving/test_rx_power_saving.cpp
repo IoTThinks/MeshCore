@@ -12,8 +12,6 @@ public:
   bool requested_enabled = false;
   uint32_t requested_rx_us = 0;
   uint32_t requested_sleep_us = 0;
-  bool rf_rx_supported = false;
-  bool rf_rx_disabled = false;
   RxPowerSavingStatus status;
 
   bool setRxPowerSaving(bool enabled, uint32_t rx_us, uint32_t sleep_us) override {
@@ -25,13 +23,6 @@ public:
   }
 
   RxPowerSavingStatus getRxPowerSavingStatus() const override { return status; }
-  bool supportsRxPowerSavingRfRxDisable() const override { return rf_rx_supported; }
-  bool setRxPowerSavingRfRxDisabled(bool disabled) override {
-    if (!rf_rx_supported) return false;
-    rf_rx_disabled = disabled;
-    return true;
-  }
-  bool isRxPowerSavingRfRxDisabled() const override { return rf_rx_disabled; }
 };
 
 TEST(RxPowerSaving, DefaultsKeepRepeaterDisabledWithBalancedIntent) {
@@ -94,6 +85,10 @@ TEST(RxPowerSaving, RejectsInvalidProfileInputs) {
   uint32_t sleep_us = 0;
 
   EXPECT_FALSE(calcRxPowerSavingLevel(0, 10, 250.0f, 16, &rx_us, &sleep_us));
+  // 8 is the top of the guarded scale, 9 overdrive, 10 the practical maximum.
+  EXPECT_TRUE(calcRxPowerSavingLevel(8, 10, 250.0f, 16, &rx_us, &sleep_us));
+  EXPECT_TRUE(calcRxPowerSavingLevel(9, 10, 250.0f, 16, &rx_us, &sleep_us));
+  EXPECT_TRUE(calcRxPowerSavingLevel(10, 10, 250.0f, 16, &rx_us, &sleep_us));
   EXPECT_FALSE(calcRxPowerSavingLevel(11, 10, 250.0f, 16, &rx_us, &sleep_us));
   EXPECT_FALSE(calcRxPowerSavingLevel(5, 4, 250.0f, 16, &rx_us, &sleep_us));
   EXPECT_FALSE(calcRxPowerSavingLevel(5, 10, 0.0f, 16, &rx_us, &sleep_us));
@@ -135,8 +130,8 @@ TEST(RxPowerSaving, NormalizesPersistedConfigBeforeApplying) {
   EXPECT_EQ(config.enabled, 1);
   EXPECT_EQ(config.level, RX_POWERSAVING_BALANCED_LEVEL);
   EXPECT_EQ(config.preamble, RX_POWERSAVING_PROFILE_PREAMBLE);
-  EXPECT_EQ(config.rx_us, 41871U);
-  EXPECT_EQ(config.sleep_us, 26851U);
+  EXPECT_EQ(config.rx_us, 49329U);
+  EXPECT_EQ(config.sleep_us, 23757U);
 }
 
 TEST(RxPowerSaving, NumericInputIsStrictDecimal) {
@@ -150,19 +145,39 @@ TEST(RxPowerSaving, NumericInputIsStrictDecimal) {
   EXPECT_FALSE(isRxPowerSavingNumeric(" 12"));
 }
 
-TEST(RxPowerSaving, CompanionProfileIsLevelFivePreambleSixteen) {
+TEST(RxPowerSaving, CompanionProfileIsBalancedPreambleSixteen) {
   uint32_t rx_us = 0;
   uint32_t sleep_us = 0;
 
-  ASSERT_TRUE(calcRxPowerSavingLevel(5, 10, 250.0f, 16, &rx_us, &sleep_us));
-  EXPECT_EQ(rx_us, 41871U);
-  EXPECT_EQ(sleep_us, 26851U);
+  ASSERT_TRUE(calcRxPowerSavingLevel(RX_POWERSAVING_BALANCED_LEVEL, 10, 250.0f, 16,
+                                     &rx_us, &sleep_us));
+  EXPECT_EQ(rx_us, 49329U);
+  EXPECT_EQ(sleep_us, 23757U);
 }
 
-TEST(RxPowerSaving, NamedProfileConstantsRemainStable) {
-  EXPECT_EQ(RX_POWERSAVING_CONSERVATIVE_LEVEL, 1);
-  EXPECT_EQ(RX_POWERSAVING_BALANCED_LEVEL, 5);
+TEST(RxPowerSaving, NamedProfilesSitWhereTheScaleSaysTheyDo) {
+  EXPECT_EQ(RX_POWERSAVING_CONSERVATIVE_LEVEL, 3);
+  EXPECT_EQ(rxPowerSavingLevelCatch(RX_POWERSAVING_CONSERVATIVE_LEVEL, 16), 13.0f);
+  EXPECT_EQ(rxPowerSavingLevelCatch(RX_POWERSAVING_CONSERVATIVE_LEVEL, 32), 16.0f);
+  EXPECT_EQ(RX_POWERSAVING_BALANCED_LEVEL, 6);
+  EXPECT_EQ(rxPowerSavingLevelCatch(RX_POWERSAVING_BALANCED_LEVEL, 16), 10.0f);
+  EXPECT_EQ(rxPowerSavingLevelCatch(RX_POWERSAVING_BALANCED_LEVEL, 32), 10.0f);
+  // The floor is shared by both profiles, and is what makes a level mean the
+  // same geometry on an SX126x and an LR11x0.
+  EXPECT_EQ(rxPowerSavingLevelCatch(RX_POWERSAVING_MAX_LEVEL, 16),
+            RX_POWERSAVING_MIN_CATCH_SYMBOLS);
+  EXPECT_EQ(rxPowerSavingLevelCatch(RX_POWERSAVING_MAX_LEVEL, 32),
+            RX_POWERSAVING_MIN_CATCH_SYMBOLS);
   EXPECT_EQ(RX_POWERSAVING_PROFILE_PREAMBLE, 16);
+
+  // Margins fall monotonically and end at zero; nothing outside the guarded
+  // scale reports one.
+  for (uint8_t lv = 2; lv <= RX_POWERSAVING_GUARDED_LEVELS; lv++) {
+    EXPECT_LT(rxPowerSavingLevelCatch(lv, 16), rxPowerSavingLevelCatch(lv - 1, 16));
+    EXPECT_LT(rxPowerSavingLevelCatch(lv, 32), rxPowerSavingLevelCatch(lv - 1, 32));
+  }
+  EXPECT_EQ(rxPowerSavingLevelCatch(RX_POWERSAVING_OVERDRIVE_LEVEL, 16), 0.0f);
+  EXPECT_EQ(rxPowerSavingLevelCatch(0, 16), 0.0f);
 }
 
 TEST(RxPowerSaving, HigherLevelTradesListenTimeForSleepTime) {
@@ -195,8 +210,13 @@ TEST(RxPowerSaving, LevelIntentRetunesAfterRadioChange) {
   uint32_t old_sleep_us = sleep_us;
 
   ASSERT_TRUE(recalcRxPowerSavingFromLevel(5, 9, 62.5f, 16, &rx_us, &sleep_us));
-  EXPECT_NEAR((double)rx_us, (double)old_rx_us * 2.0, 1.0);
-  EXPECT_NEAR((double)sleep_us, (double)old_sleep_us * 2.0, 1.0);
+  // Sleep is pure symbols, so it doubles with the symbol time. The listen
+  // window no longer does: the SetRxDutyCycle timer guard adds half of the
+  // sleep->RX transition, which is a fixed number of microseconds and does not
+  // scale with SF. So the window grows, but by less than a factor of two.
+  EXPECT_NEAR((double)sleep_us, (double)old_sleep_us * 2.0, 32.0);
+  EXPECT_GT(rx_us, old_rx_us);
+  EXPECT_LT((double)rx_us, (double)old_rx_us * 2.0);
 }
 
 TEST(RxPowerSaving, AutomaticPreambleRetunesAcrossSfBoundary) {
@@ -234,15 +254,21 @@ TEST(RxPowerSavingCLI, AppliesNamedAndManualProfiles) {
   FakeRxPowerSavingControl control;
   char reply[192];
 
+  ASSERT_TRUE(RXPowerSavingCLI::set("conservative", 10, 250.0f, &config, &control,
+                                    reply, sizeof(reply)));
+  EXPECT_EQ(config.level, 3);
+  EXPECT_EQ(config.preamble, 16);
+
   ASSERT_TRUE(RXPowerSavingCLI::set("balanced", 10, 250.0f, &config, &control,
                                     reply, sizeof(reply)));
   EXPECT_TRUE(control.set_called);
   EXPECT_TRUE(control.requested_enabled);
   EXPECT_EQ(config.enabled, 1);
   EXPECT_EQ(config.level, RX_POWERSAVING_BALANCED_LEVEL);
+  EXPECT_EQ(config.level, 6);
   EXPECT_EQ(config.preamble, RX_POWERSAVING_PROFILE_PREAMBLE);
-  EXPECT_EQ(config.rx_us, 41871U);
-  EXPECT_EQ(config.sleep_us, 26851U);
+  EXPECT_EQ(config.rx_us, 49329U);
+  EXPECT_EQ(config.sleep_us, 23757U);
 
   control.set_called = false;
   ASSERT_TRUE(RXPowerSavingCLI::set("12345 23456", 10, 250.0f, &config, &control,
@@ -282,7 +308,7 @@ TEST(RxPowerSavingCLI, DoesNotPersistRejectedOrInvalidChanges) {
                                      reply, sizeof(reply)));
   EXPECT_EQ(config.enabled, original.enabled);
   EXPECT_EQ(config.level, original.level);
-  EXPECT_STREQ(reply, "ERROR: level range is 1-10; preamble is 16 or 32");
+  EXPECT_STREQ(reply, "ERROR: level range is 1-10 (or max|overdrive|riskyWorkingMax); preamble is 16 or 32");
 
   control.accept = false;
   EXPECT_FALSE(RXPowerSavingCLI::set("balanced", 10, 250.0f, &config, &control,
@@ -346,7 +372,7 @@ TEST(RxPowerSavingCLI, FormatsDesiredAndEffectiveStateSeparately) {
   control.status = {true, false, -706, 2, 0, 0};
   char reply[192];
 
-  RXPowerSavingCLI::get(&config, &control, reply, sizeof(reply));
+  RXPowerSavingCLI::get(&config, &control, 10, 250.0f, reply, sizeof(reply));
 
   EXPECT_NE(std::strstr(reply, "desired=on,effective=continuous,supported=yes"), nullptr);
   EXPECT_NE(std::strstr(reply, "err=-706,fail=2"), nullptr);
@@ -361,13 +387,13 @@ TEST(RxPowerSavingCLI, ReportsClampedPeriodsOnlyWhenTheyDiffer) {
 
   // driver armed exactly what was asked for -> no extra fields
   control.status = {true, true, 0, 0, config.rx_us, config.sleep_us};
-  RXPowerSavingCLI::get(&config, &control, reply, sizeof(reply));
+  RXPowerSavingCLI::get(&config, &control, 10, 250.0f, reply, sizeof(reply));
   EXPECT_NE(std::strstr(reply, "effective=armed"), nullptr);
   EXPECT_EQ(std::strstr(reply, "erx="), nullptr);
 
   // driver had to stretch the RX window -> surface the real values
   control.status = {true, true, 0, 0, config.rx_us + 4000, config.sleep_us};
-  RXPowerSavingCLI::get(&config, &control, reply, sizeof(reply));
+  RXPowerSavingCLI::get(&config, &control, 10, 250.0f, reply, sizeof(reply));
   EXPECT_NE(std::strstr(reply, "erx=69625,eslp=60000"), nullptr);
 }
 
@@ -378,29 +404,397 @@ TEST(RxPowerSavingCLI, GetDoesNotMutateStoredConfig) {
   FakeRxPowerSavingControl control;
   char reply[192];
 
-  RXPowerSavingCLI::get(&config, &control, reply, sizeof(reply));
+  RXPowerSavingCLI::get(&config, &control, 10, 250.0f, reply, sizeof(reply));
 
   EXPECT_EQ(config.rx_us, 0U);
   EXPECT_EQ(config.sleep_us, 999U);
 }
 
-TEST(RxPowerSavingCLI, RfRxDiagnosticIsRuntimeOnlyAndCapabilityGated) {
-  FakeRxPowerSavingControl control;
-  char reply[192];
-
-  RXPowerSavingCLI::setRfRxDisabled("on", &control, reply, sizeof(reply));
-  EXPECT_STREQ(reply, "Error: unsupported");
-
-  control.rf_rx_supported = true;
-  RXPowerSavingCLI::setRfRxDisabled("on", &control, reply, sizeof(reply));
-  EXPECT_TRUE(control.rf_rx_disabled);
-  EXPECT_STREQ(reply, "OK - radio.rxps.rfrx_disabled on");
-
-  RXPowerSavingCLI::getRfRxDisabled(&control, reply, sizeof(reply));
-  EXPECT_STREQ(reply, "> on");
-}
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
+}
+
+// Measured on SX1262 at SF6/BW62.5: the P16 profile's own sleep is below the
+// driver's arming floor on levels 1-5 (and on levels 1-2 at SF7), where
+// startReceiveDutyCycle answers -708 and the wrapper falls back to continuous
+// RX while the config still reports power saving as on.
+TEST(RxPowerSaving, ShortSleepIsRaisedToTheArmingFloor) {
+  uint32_t rx_us = 0;
+  uint32_t sleep_us = 0;
+
+  // SF6/BW62.5: level 1 of the P16 profile asks for 2 symbols = 2048 us.
+  ASSERT_TRUE(calcRxPowerSavingLevel(1, 6, 62.5f, 16, &rx_us, &sleep_us));
+  EXPECT_EQ(sleep_us, RX_POWERSAVING_MIN_SLEEP_US);
+  // Raising it must not break capture: the budget is preamble - cost symbols.
+  EXPECT_LE(sleep_us, (uint32_t)((16.0f - RX_POWERSAVING_CAPTURE_COST_SYMBOLS) * 1024.0f));
+
+  // Only level 2 still lands under the floor. Before MC_TCXO_DELAY_US dropped
+  // the transition from 6000 to 2600 us the floor was 6250 us and swallowed
+  // levels 2-6 as well, so most of the 16-symbol ladder collapsed onto one
+  // point at SF6 - the node quietly slept longer, and caught fewer symbols,
+  // than the level it was set to promised.
+  for (uint8_t lv = 2; lv <= 2; lv++) {
+    uint32_t rx_n = 0;
+    uint32_t sleep_n = 0;
+    ASSERT_TRUE(calcRxPowerSavingLevel(lv, 6, 62.5f, 16, &rx_n, &sleep_n)) << (int)lv;
+    EXPECT_EQ(sleep_n, RX_POWERSAVING_MIN_SLEEP_US) << (int)lv;
+    EXPECT_EQ(rx_n, rx_us) << (int)lv;
+  }
+
+  // Level 4 sleeps 3.8 symbols, which now fits above the floor, so it gets its
+  // own point and saves more power than the collapsed ones.
+  uint32_t rx5_us = 0;
+  uint32_t sleep5_us = 0;
+  ASSERT_TRUE(calcRxPowerSavingLevel(4, 6, 62.5f, 16, &rx5_us, &sleep5_us));
+  EXPECT_GT(sleep5_us, RX_POWERSAVING_MIN_SLEEP_US);
+  EXPECT_LT((double)rx5_us / (rx5_us + sleep5_us),
+            (double)rx_us / (rx_us + sleep_us));
+}
+
+TEST(RxPowerSaving, RejectsProfilesWhoseFloorWouldBreakCapture) {
+  uint32_t rx_us = 0;
+  uint32_t sleep_us = 0;
+
+  // SF6/BW250: the symbol is 256 us, so the whole P16 capture budget is
+  // 10 symbols = 2560 us - under the arming floor. No level can duty cycle
+  // here, and the caller has to hear that rather than get a silent fallback.
+  //
+  // This used to be SF7/BW250, which the lower transition has since brought
+  // within reach: its budget is 5120 us against a floor that fell from 6250 to
+  // 2850, so the whole P16 ladder became armable there. The refusal path still
+  // needs a setting that is genuinely out of reach, so the example moved down
+  // one SF rather than away.
+  EXPECT_FALSE(calcRxPowerSavingLevel(1, 6, 250.0f, 16, &rx_us, &sleep_us));
+  EXPECT_FALSE(calcRxPowerSavingLevel(RX_POWERSAVING_MAX_LEVEL, 6, 250.0f, 16,
+                                     &rx_us, &sleep_us));
+
+  // The P32 profile has 26 symbols of budget at the same setting and survives.
+  EXPECT_TRUE(calcRxPowerSavingLevel(1, 6, 250.0f, 32, &rx_us, &sleep_us));
+  EXPECT_GE(sleep_us, RX_POWERSAVING_MIN_SLEEP_US);
+
+  // And the setting that moved: SF7/BW250 with P16 now arms on every level.
+  EXPECT_TRUE(calcRxPowerSavingLevel(1, 7, 250.0f, 16, &rx_us, &sleep_us));
+  EXPECT_TRUE(calcRxPowerSavingLevel(RX_POWERSAVING_MAX_LEVEL, 7, 250.0f, 16,
+                                     &rx_us, &sleep_us));
+}
+
+TEST(RxPowerSaving, TransitionTimeComesFromTheRadioLikeCaptureCost) {
+  class SlowTcxoControl : public RxPowerSavingControl {
+  public:
+    uint32_t rxPowerSavingTransitionUs() const override { return 11750; }
+  } slow;
+
+  EXPECT_EQ(rxPowerSavingTransition(nullptr), RX_POWERSAVING_TRANSITION_US);
+  EXPECT_EQ(rxPowerSavingTransition(&slow), 11750u);
+
+  // SF7 rather than SF6: a 12 ms floor does not fit inside the 10-symbol
+  // capture budget of a 1024 us symbol, which is the rejection case above.
+  uint32_t rx_us = 0;
+  uint32_t sleep_us = 0;
+  ASSERT_TRUE(calcRxPowerSavingLevel(1, 7, 62.5f, 16, &rx_us, &sleep_us,
+                                     RX_POWERSAVING_CAPTURE_COST_SYMBOLS,
+                                     rxPowerSavingTransition(&slow)));
+  // Floor is transition + margin, snapped to a whole 15.625 us tick.
+  EXPECT_GE(sleep_us, 12000u);
+  EXPECT_LT(sleep_us, 12020u);
+}
+
+TEST(RxPowerSavingCLI, ReportsWhenNoLevelCanDutyCycleAtThisRadioSetting) {
+  RxPowerSavingConfig config;
+  FakeRxPowerSavingControl control;
+  char reply[160];
+
+  // SF6/BW250 with the P16 profile: nothing between the arming floor and the
+  // capture budget, so the level must be refused with a message that names the
+  // real reason instead of blaming the level range.
+  EXPECT_FALSE(RXPowerSavingCLI::set("level 5 preamble 16", 6, 250.0f, &config, &control,
+                                     reply, sizeof(reply)));
+  EXPECT_NE(strstr(reply, "SF/BW"), nullptr);
+  EXPECT_FALSE(control.set_called);
+  EXPECT_EQ(config.enabled, 0);
+}
+
+// SX1261/2 datasheet, SetRxDutyCycle: on preamble detection the radio restarts
+// its timer with 2*rxPeriod + sleepPeriod and requires
+//     Tpreamble + Theader <= 2 * rxPeriod + sleepPeriod
+// Measured on two SX1262 boards: when that holds nothing goes wrong, and when
+// it is broken the chip usually gets away with it - except at isolated register
+// values one tick wide (rxPeriod 320 and 640) where it loses 35-100% of the
+// packets it has already latched. Satisfying the condition is the only defence
+// that does not depend on knowing every bad tick.
+TEST(RxPowerSaving, EveryLevelSatisfiesTheDutyCycleTimerCondition) {
+  const uint8_t sfs[] = {6, 7, 8, 10, 12};
+  const float bws[] = {62.5f, 250.0f};
+  const uint8_t preambles[] = {16, 32};
+
+  for (uint8_t sf : sfs) {
+    for (float bw : bws) {
+      for (uint8_t preamble : preambles) {
+        for (uint8_t level = 1; level <= RX_POWERSAVING_GUARDED_LEVELS; level++) {
+          uint32_t rx_us = 0;
+          uint32_t sleep_us = 0;
+          if (!calcRxPowerSavingLevel(level, sf, bw, preamble, &rx_us, &sleep_us)) {
+            continue;   // rejected outright; nothing is armed, nothing to check
+          }
+          const float symbol_us = (1000.0f * (float)(1UL << sf)) / bw;
+          const float sync = sf <= 6 ? RX_POWERSAVING_SYNC_SYMBOLS_LOW_SF
+                                     : RX_POWERSAVING_SYNC_SYMBOLS;
+          const float need =
+              ((float)preamble + sync + RX_POWERSAVING_HEADER_SYMBOLS) * symbol_us;
+          // Compare on the register values the radio really runs, not on the
+          // microseconds we asked for: the driver truncates to 15.625 us ticks.
+          const uint32_t rx_ticks = (rx_us * 8) / 125;
+          const uint32_t sleep_ticks =
+              ((sleep_us - RX_POWERSAVING_TRANSITION_US) * 8) / 125;
+          const float restarted = (2.0f * rx_ticks + sleep_ticks) * 15.625f;
+          EXPECT_GE(restarted, need)
+              << "SF" << (int)sf << " BW" << bw << " P" << (int)preamble
+              << " level " << (int)level;
+          // And the periods handed out must themselves be whole ticks, so the
+          // CLI reports what the hardware runs.
+          EXPECT_EQ((rx_ticks * 125 + 7) / 8, rx_us);
+        }
+      }
+    }
+  }
+}
+
+// Level 11 is the measured maximum: the geometry the bench ran before the timer
+// guard existed, kept because the guard costs 4 to 12 percentage points of duty
+// cycle. 8 symbols of listening, sleep right at the capture budget.
+TEST(RxPowerSaving, OverdriveIsTheMeasuredGeometryAtEverySf) {
+  const uint8_t sfs[] = {6, 7, 8, 10};
+  for (uint8_t sf : sfs) {
+    for (uint8_t preamble : {16, 32}) {
+      uint32_t rx_us = 0;
+      uint32_t sleep_us = 0;
+      ASSERT_TRUE(calcRxPowerSavingLevel(RX_POWERSAVING_OVERDRIVE_LEVEL, sf, 62.5f,
+                                         (uint8_t)preamble, &rx_us, &sleep_us))
+          << "SF" << (int)sf << " P" << preamble;
+      const float symbol_us = (1000.0f * (float)(1UL << sf)) / 62.5f;
+      EXPECT_NEAR(rx_us / symbol_us, 8.0f  /* rx_edge_symbols */, 0.02f);
+      EXPECT_NEAR(sleep_us / symbol_us,
+                  preamble - RX_POWERSAVING_CAPTURE_COST_SYMBOLS, 0.02f);
+      // The whole point: 23.5% duty on P32, 44.4% on P16, at every SF.
+      const double duty = 100.0 * rx_us / (rx_us + sleep_us);
+      EXPECT_NEAR(duty, preamble == 32 ? 23.5 : 44.4, 0.2);
+    }
+  }
+}
+
+TEST(RxPowerSaving, OverdriveDeliberatelyBreaksTheTimerCondition) {
+  // Stated as a test so nobody later "fixes" it into compliance by accident:
+  // level 11 exists precisely because it sits outside the datasheet rule, and
+  // it was measured lossless there on three boards across SF6, SF7 and SF8.
+  uint32_t rx_us = 0;
+  uint32_t sleep_us = 0;
+  ASSERT_TRUE(calcRxPowerSavingLevel(RX_POWERSAVING_OVERDRIVE_LEVEL, 6, 62.5f, 32,
+                                     &rx_us, &sleep_us));
+  const float symbol_us = (1000.0f * 64.0f) / 62.5f;
+  const float need = (32.0f + RX_POWERSAVING_SYNC_SYMBOLS_LOW_SF +
+                      RX_POWERSAVING_HEADER_SYMBOLS) * symbol_us;
+  const uint32_t rx_ticks = (rx_us * 8) / 125;
+  const uint32_t sleep_ticks = ((sleep_us - RX_POWERSAVING_TRANSITION_US) * 8) / 125;
+  EXPECT_LT((2.0f * rx_ticks + sleep_ticks) * RX_POWERSAVING_TICK_US, need);
+
+  // and the top of the guarded scale must still satisfy it
+  uint32_t g_rx = 0;
+  uint32_t g_sleep = 0;
+  ASSERT_TRUE(calcRxPowerSavingLevel(RX_POWERSAVING_MAX_LEVEL, 6, 62.5f, 32, &g_rx, &g_sleep));
+  const uint32_t g_rx_ticks = (g_rx * 8) / 125;
+  const uint32_t g_sleep_ticks = ((g_sleep - RX_POWERSAVING_TRANSITION_US) * 8) / 125;
+  EXPECT_GE((2.0f * g_rx_ticks + g_sleep_ticks) * RX_POWERSAVING_TICK_US, need);
+  EXPECT_LT(rx_us, g_rx);            // and it really does listen less
+}
+
+TEST(RxPowerSaving, OverdriveStepsOffTheKnownBadRegisterTicks) {
+  // 8 symbols land on rxPeriod tick 320 when the symbol is 625 us. No standard
+  // bandwidth produces that, which is why production never hit it - but the
+  // unguarded path has no other protection, so the check has to work.
+  uint32_t rx_us = 0;
+  uint32_t sleep_us = 0;
+  ASSERT_TRUE(calcRxPowerSavingLevel(RX_POWERSAVING_OVERDRIVE_LEVEL, 6, 102.4f, 32,
+                                     &rx_us, &sleep_us));
+  EXPECT_EQ((rx_us * 8) / 125, 321u);   // nudged one tick clear of 320
+  EXPECT_EQ(rx_us, 5016u);
+
+  // The guarded scale needs no such help and must be left alone.
+  uint32_t g_rx = 0;
+  uint32_t g_sleep = 0;
+  ASSERT_TRUE(calcRxPowerSavingLevel(10, 6, 102.4f, 32, &g_rx, &g_sleep));
+  EXPECT_NE((g_rx * 8) / 125, 320u);
+}
+
+TEST(RxPowerSavingCLI, OverdriveAndMaxPresetsSelectTheRightLevels) {
+  RxPowerSavingConfig config;
+  FakeRxPowerSavingControl control;
+  char reply[160];
+
+  // `max` is the top of the guarded scale, and like every named preset it
+  // assumes a 16-symbol sender, so at SF<=8 it is deliberately less economical
+  // than `level 8`, which follows the SF onto the 32-symbol profile.
+  ASSERT_TRUE(RXPowerSavingCLI::set("max", 8, 62.5f, &config, &control,
+                                    reply, sizeof(reply)));
+  EXPECT_EQ(config.level, RX_POWERSAVING_MAX_LEVEL);
+  EXPECT_EQ(config.level, 8);
+  EXPECT_EQ(rxPowerSavingLevelCatch(config.level, 16), RX_POWERSAVING_MIN_CATCH_SYMBOLS);
+  EXPECT_EQ(config.preamble, 16);
+  EXPECT_EQ(strstr(reply, "overdrive"), nullptr);
+  const uint32_t max_rx = config.rx_us;
+  const uint32_t max_sleep = config.sleep_us;
+
+  ASSERT_TRUE(RXPowerSavingCLI::set("level 8", 8, 62.5f, &config, &control,
+                                    reply, sizeof(reply)));
+  EXPECT_EQ(config.preamble, 0);
+  EXPECT_LT((double)config.rx_us / (config.rx_us + config.sleep_us),
+            (double)max_rx / (max_rx + max_sleep));
+
+  // `overdrive` is one step past it, on the same worst-case preamble.
+  ASSERT_TRUE(RXPowerSavingCLI::set("overdrive", 8, 62.5f, &config, &control,
+                                    reply, sizeof(reply)));
+  EXPECT_EQ(config.level, RX_POWERSAVING_OVERDRIVE_LEVEL);
+  EXPECT_EQ(config.preamble, 16);
+  EXPECT_NE(strstr(reply, "overdrive"), nullptr);
+  EXPECT_LT(config.rx_us, max_rx);        // and really does listen less
+
+  control.status.supported = true;
+  control.status.armed = true;
+  RXPowerSavingCLI::get(&config, &control, 10, 250.0f, reply, sizeof(reply));
+  EXPECT_NE(strstr(reply, "(overdrive)"), nullptr);
+
+  // Both names take an explicit preamble, which is how the 32-symbol profile
+  // is reached without giving up the preset.
+  ASSERT_TRUE(RXPowerSavingCLI::set("overdrive preamble 32", 8, 62.5f, &config,
+                                    &control, reply, sizeof(reply)));
+  EXPECT_EQ(config.level, RX_POWERSAVING_OVERDRIVE_LEVEL);
+  EXPECT_EQ(config.preamble, 32);
+  ASSERT_TRUE(RXPowerSavingCLI::set("max preamble 32", 8, 62.5f, &config,
+                                    &control, reply, sizeof(reply)));
+  EXPECT_EQ(config.level, RX_POWERSAVING_MAX_LEVEL);
+  EXPECT_EQ(config.preamble, 32);
+
+  EXPECT_FALSE(RXPowerSavingCLI::set("overdrive preamble 24", 8, 62.5f, &config,
+                                     &control, reply, sizeof(reply)));
+  EXPECT_FALSE(RXPowerSavingCLI::set("max preamble", 8, 62.5f, &config,
+                                     &control, reply, sizeof(reply)));
+  EXPECT_FALSE(RXPowerSavingCLI::set("level 11", 8, 62.5f, &config, &control,
+                                     reply, sizeof(reply)));
+}
+
+TEST(RxPowerSaving, RiskyWorkingMaxIsTheMeasuredEdgeAndCostsDelivery) {
+  // The bench walked the profile past level 10 until delivery came back:
+  // virtual 11.0 for P32, 10.25 for P16. Both put the sleep beyond the capture
+  // budget, which is the whole reason they lose packets - 196/200 and 197/200
+  // at SF8 with an LR1110 witnessing every transmission.
+  const float symbol_us = (1000.0f * 256.0f) / 62.5f;   // SF8 / BW62.5
+
+  uint32_t rx32 = 0;
+  uint32_t sleep32 = 0;
+  ASSERT_TRUE(calcRxPowerSavingLevel(RX_POWERSAVING_RISKY_WORKING_MAX_LEVEL, 8, 62.5f, 32,
+                                     &rx32, &sleep32));
+  EXPECT_NEAR(rx32 / symbol_us, 7.111f, 0.02f);
+  EXPECT_NEAR(sleep32 / symbol_us, 27.222f, 0.02f);
+  EXPECT_GT(sleep32 / symbol_us, 32.0f - RX_POWERSAVING_CAPTURE_COST_SYMBOLS);
+
+  uint32_t rx16 = 0;
+  uint32_t sleep16 = 0;
+  ASSERT_TRUE(calcRxPowerSavingLevel(RX_POWERSAVING_RISKY_WORKING_MAX_LEVEL, 8, 62.5f, 16,
+                                     &rx16, &sleep16));
+  EXPECT_NEAR(rx16 / symbol_us, 7.889f, 0.02f);
+  EXPECT_NEAR(sleep16 / symbol_us, 10.222f, 0.02f);
+  EXPECT_GT(sleep16 / symbol_us, 16.0f - RX_POWERSAVING_CAPTURE_COST_SYMBOLS);
+
+  // It must sleep more than overdrive, or it would have no reason to exist.
+  uint32_t o_rx = 0;
+  uint32_t o_sleep = 0;
+  ASSERT_TRUE(calcRxPowerSavingLevel(RX_POWERSAVING_OVERDRIVE_LEVEL, 8, 62.5f, 32,
+                                     &o_rx, &o_sleep));
+  EXPECT_GT((double)sleep32 / (rx32 + sleep32), (double)o_sleep / (o_rx + o_sleep));
+
+  // Both levels past the guarded scale skip the timer guard.
+  EXPECT_TRUE(isRxPowerSavingUnguardedLevel(RX_POWERSAVING_RISKY_WORKING_MAX_LEVEL));
+  EXPECT_TRUE(isRxPowerSavingUnguardedLevel(RX_POWERSAVING_OVERDRIVE_LEVEL));
+  EXPECT_FALSE(isRxPowerSavingUnguardedLevel(RX_POWERSAVING_MAX_LEVEL));
+}
+
+TEST(RxPowerSavingCLI, RiskyWorkingMaxUsesOneNameEverywhere) {
+  RxPowerSavingConfig config;
+  FakeRxPowerSavingControl control;
+  char reply[160];
+
+  ASSERT_TRUE(RXPowerSavingCLI::set("riskyWorkingMax", 8, 62.5f, &config,
+                                    &control, reply, sizeof(reply)));
+  EXPECT_EQ(config.level, RX_POWERSAVING_RISKY_WORKING_MAX_LEVEL);
+  EXPECT_EQ(config.preamble, 16);
+  EXPECT_NE(strstr(reply, "(riskyWorkingMax)"), nullptr);
+
+  ASSERT_TRUE(RXPowerSavingCLI::set("riskyWorkingMax preamble 32", 8, 62.5f,
+                                    &config, &control, reply, sizeof(reply)));
+  EXPECT_EQ(config.preamble, 32);
+
+  control.status.supported = true;
+  control.status.armed = true;
+  RXPowerSavingCLI::get(&config, &control, 10, 250.0f, reply, sizeof(reply));
+  EXPECT_NE(strstr(reply, "(riskyWorkingMax)"), nullptr);
+
+  // The name remains case-sensitive and has no shortcut.
+  EXPECT_FALSE(RXPowerSavingCLI::set("riskyworkingmax", 8, 62.5f, &config, &control,
+                                     reply, sizeof(reply)));
+}
+
+// The whole point of the scale: level N means "a sender's preamble may be N
+// symbols shorter than this profile assumes and still be caught". That has to
+// hold on every SF, bandwidth and profile, because being dimensionless is the
+// reason the scale is expressed this way rather than in microseconds or in
+// milliamperes - both of which differ per board.
+TEST(RxPowerSaving, EveryGuardedLevelDeliversTheMarginItPromises) {
+  const uint8_t sfs[] = {7, 8, 9, 10, 12};
+  const float bws[] = {62.5f, 125.0f, 250.0f};
+  const uint8_t preambles[] = {16, 32};
+
+  for (uint8_t sf : sfs) {
+    for (float bw : bws) {
+      for (uint8_t preamble : preambles) {
+        for (uint8_t level = 1; level <= RX_POWERSAVING_GUARDED_LEVELS; level++) {
+          uint32_t rx_us = 0;
+          uint32_t sleep_us = 0;
+          if (!calcRxPowerSavingLevel(level, sf, bw, preamble, &rx_us, &sleep_us)) {
+            continue;   // rejected outright, nothing to check
+          }
+          if (sleep_us == RX_POWERSAVING_MIN_SLEEP_US) {
+            continue;   // the floor ate the margin; reported by the CLI, not a bug
+          }
+          const float symbol_us = (1000.0f * (float)(1UL << sf)) / bw;
+          const float caught = (float)preamble - (float)sleep_us / symbol_us;
+          // The delivered catch is the ladder value plus the pad that keeps
+          // every generated geometry off the defective register pairs.
+          EXPECT_NEAR(caught,
+                      rxPowerSavingLevelCatch(level, preamble) + RX_POWERSAVING_MARGIN_PAD_SYMBOLS,
+                      0.05f)
+              << "SF" << (int)sf << " BW" << bw << " P" << (int)preamble
+              << " level " << (int)level;
+        }
+      }
+    }
+  }
+}
+
+TEST(RxPowerSaving, ALevelMeansTheSameGeometryOnBothRadioFamilies) {
+  // This is what the catch scale buys that the old margin scale could not: the
+  // capture cost is no longer part of the arithmetic, so a level produces the
+  // same periods whether the driver declares 6 symbols (SX126x) or 8 (LR11x0).
+  // Before, the same level number meant two different sleeps on the two chips.
+  for (uint8_t level = 1; level <= RX_POWERSAVING_GUARDED_LEVELS; level++) {
+    for (uint8_t preamble : {16, 32}) {
+      uint32_t rx_sx = 0, sleep_sx = 0, rx_lr = 0, sleep_lr = 0;
+      ASSERT_TRUE(calcRxPowerSavingLevel(level, 8, 62.5f, preamble, &rx_sx, &sleep_sx,
+                                         RX_POWERSAVING_CAPTURE_COST_SYMBOLS));
+      ASSERT_TRUE(calcRxPowerSavingLevel(level, 8, 62.5f, preamble, &rx_lr, &sleep_lr,
+                                         RX_POWERSAVING_CAPTURE_COST_SYMBOLS_LR11X0));
+      EXPECT_EQ(sleep_sx, sleep_lr) << "level " << (int)level << " P" << (int)preamble;
+      EXPECT_EQ(rx_sx, rx_lr) << "level " << (int)level << " P" << (int)preamble;
+    }
+  }
 }
