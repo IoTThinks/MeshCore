@@ -148,6 +148,12 @@ Xiao_C3_companion_radio_usb \
 Xiao_S3_companion_radio_usb \
 Xiao_S3_WIO_companion_radio_usb
 
+############# Sensor #############
+# NRF52 - 2 boards
+sh build.sh build-firmware \
+Heltec_t114_sensor \
+t1000e_sensor
+
 ############# Sample builds #############
 # 23 boards
 sh build.sh build-firmware \
