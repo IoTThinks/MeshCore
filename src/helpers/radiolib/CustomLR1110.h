@@ -21,6 +21,8 @@ class CustomLR1110 : public LR1110 {
       int16_t state = LR1110::begin(freq, bw, sf, cr, syncWord, power, preambleLength,
                                     tcxoVoltage);
       if (state == RADIOLIB_ERR_NONE) applyMeshCoreTcxoDelay();
+      // RadioLib begin() defaults to LDO; use the LR1110 DC/DC regulator.
+      if (state == RADIOLIB_ERR_NONE) state = setRegulatorDCDC();
       return state;
     }
 
