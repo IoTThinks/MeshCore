@@ -878,7 +878,9 @@ bool EnvironmentSensorManager::gpsIsAwake(uint8_t ioPin) {
     return true;
   }
 
+  #ifndef RAK_3401
   pinMode(ioPin, INPUT);
+  #endif
   MESH_DEBUG_PRINTLN("GPS did not init with this IO pin... try the next");
   return false;
 }
