@@ -265,8 +265,8 @@ void setup() {
 #endif
 
   // Configure Power Management
-#if defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT
-  // Disable automatic light sleep for USB CDC Serial
+#if (defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT) || defined(ENABLE_USB_INTERFACE)
+  // Disable automatic light sleep for USB CDC Serial and USB Companion
   pm_config = { .max_freq_mhz = 80, .min_freq_mhz = 40, .light_sleep_enable = false };
 #else
   pm_config = { .max_freq_mhz = 80, .min_freq_mhz = 40, .light_sleep_enable = true };
