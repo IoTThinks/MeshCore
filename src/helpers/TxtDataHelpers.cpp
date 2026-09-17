@@ -102,9 +102,16 @@ static void _ftoa(float f, char *p, int *status)
     *p++ = '0';
   else 
   {
-    ltoa(int_part, p, 10);
+    #if defined(STM32_PLATFORM)
+    int written = snprintf(p, 16, "%" PRId32, int_part);
+    if (written > 0) {
+      p += written;
+    }
+    #else
+    ltoa(int_part, p, 10); 
     while (*p)
       p++;
+    #endif
   }
   *p++ = '.';
   if (frac_part == 0)
