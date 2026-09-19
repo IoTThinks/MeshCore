@@ -50,7 +50,7 @@ public:
   bool canControlLoRaFemPaGain() const override;
   bool isLoRaFemPaGainEnabled() const override;
 
-  void powerOff() override;
+  void shutdownPeripherals() override;
 
   uint16_t getBattMilliVolts() override {
     return 0;

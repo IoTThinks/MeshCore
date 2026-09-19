@@ -24,7 +24,7 @@ public:
   void onAfterTransmit(void) override;
   uint16_t getBattMilliVolts() override;
   const char* getManufacturerName() const override ;
-  void powerOff() override;
+  void shutdownPeripherals() override;
   bool setLoRaFemLnaEnabled(bool enable) override;
   bool canControlLoRaFemLna() const override;
   bool isLoRaFemLnaEnabled() const override;

@@ -22,7 +22,7 @@ public:
   void begin();
   void onBeforeTransmit(void) override;
   void onAfterTransmit(void) override;
-  void powerOff() override;
+  void shutdownPeripherals() override;
   bool setLoRaFemLnaEnabled(bool enable) override;
   bool canControlLoRaFemLna() const override;
   bool isLoRaFemLnaEnabled() const override;

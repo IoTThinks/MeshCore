@@ -47,7 +47,9 @@ const char* TBeam1WBoard::getManufacturerName() const {
   return "LilyGo T-Beam 1W";
 }
 
-void TBeam1WBoard::powerOff() {
+void TBeam1WBoard::shutdownPeripherals() {
+  ESP32Board::shutdownPeripherals();
+
   // Turn off radio LNA (CTRL pin must be LOW when not receiving)
   digitalWrite(SX126X_RXEN, LOW);
 
@@ -58,8 +60,6 @@ void TBeam1WBoard::powerOff() {
   // Turn off LED and fan
   digitalWrite(LED_PIN, LOW);
   digitalWrite(FAN_CTRL_PIN, LOW);
-
-  ESP32Board::powerOff();
 }
 
 void TBeam1WBoard::setFanEnabled(bool enabled) {

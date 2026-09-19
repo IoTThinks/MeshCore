@@ -32,12 +32,12 @@ void HeltecV4Board::begin() {
     loRaFEMControl.setRxModeEnable();
   }
 
-  void HeltecV4Board::powerOff() {
+  void HeltecV4Board::shutdownPeripherals() {
+    ESP32Board::shutdownPeripherals();
+
     // Turn off PA
     digitalWrite(P_LORA_PA_POWER, LOW);
     rtc_gpio_hold_en((gpio_num_t)P_LORA_PA_POWER);
-
-    ESP32Board::powerOff();
   }
 
   uint16_t HeltecV4Board::getBattMilliVolts()  {
