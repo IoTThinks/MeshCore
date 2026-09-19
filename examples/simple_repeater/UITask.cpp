@@ -151,9 +151,6 @@ void UITask::loop() {
   }
 
   if (_powering_off_at > 0) { // power off timer armed
-#ifdef LED_PIN
-    digitalWrite(LED_PIN, LED_STATE_ON); // switch on the led until poweroff
-#endif
     if (millis() > _powering_off_at) {
       _board->powerOff();  // should not return
     }
