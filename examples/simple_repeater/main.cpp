@@ -105,12 +105,9 @@ void setup() {
 #if ENV_INCLUDE_GPS == 1
   // Apply PowerSaving profile for GPS
   if (sensors.getLocationProvider() != NULL) {
-    // Let CLI "gps on" call setSettingValue to enable the PowerSaving mode
-    // sensors.powersaving_enabled = true;
-    // sensors.getLocationProvider()->enablePowerSaving(true);
-
     // GPS on and off duration in seconds
-    sensors.getLocationProvider()->setPowerSavingProfile(600, 86400); // Max 10 minutes, 1 day
+    sensors.getLocationProvider()->setPowerSavingProfile(the_mesh.getNodePrefs()->powersaving_enabled, 600,
+                                                         86400); // Max 10 minutes, 1 day
   }
 #endif
 

@@ -13,9 +13,8 @@ class SensorManager {
 public:
   double node_lat, node_lon;  // modify these, if you want to affect Advert location
   double node_altitude;       // altitude in meters
-  bool powersaving_enabled;   // powersaving mode
 
-  SensorManager() { node_lat = 0; node_lon = 0; node_altitude = 0; powersaving_enabled = false; }
+  SensorManager() { node_lat = 0; node_lon = 0; node_altitude = 0; }
   virtual bool begin() { return false; }
   virtual bool querySensors(uint8_t requester_permissions, CayenneLPP& telemetry) { return false; }
   virtual void loop() { }

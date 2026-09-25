@@ -926,6 +926,7 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _prefs.rx_boosted_gain = 1; // enabled by default
 #endif
 #endif
+  _prefs.powersaving_enabled = 1; // Power Saving enabled by default
 }
 
 void MyMesh::begin(bool has_display) {
@@ -1689,6 +1690,9 @@ void MyMesh::handleCmdFrame(size_t len) {
     }
 
     // query other sensors -- target specific
+    if (sensors.getLocationProvider() != NULL && sensors.getLocationProvider()->isPowerSavingEnabled()) {
+      sensors.getLocationProvider()->syncTime(); // Request for GPS sync if GPS is in PowerSaving
+    }
     sensors.querySensors(0xFF, telemetry);
 
     int i = 0;

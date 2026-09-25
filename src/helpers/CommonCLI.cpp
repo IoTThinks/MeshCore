@@ -397,38 +397,41 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, char* command, char* re
         int sats = l->satellitesCount();
         bool active = !strcmp(_sensors->getSettingByKey("gps") ?: "0", "1"); // Use "0" if GPS setting is not found
 
-        if (_prefs->powersaving_enabled && l->isPowerSavingEnabled()) { // GPS Power Saving
-          if (enabled) {
-            unsigned long mins = (l->getNextSleep() - millis()) / 60000UL;
-            sprintf(reply, "on (powersaving, sleep in %luh %lum), %s, %s, %d sats", 
-              mins / 60UL, 
-              mins % 60UL,
-              active ? "active" : "deactivated", 
-              fix ? "fix" : "no fix", 
-              sats);
-          } else {
-            unsigned long mins = (l->getNextWake() - millis()) / 60000UL;
-            sprintf(reply, "off (powersaving, wake in %luh %lum)",
-              mins / 60UL,
-              mins % 60UL);
-          }
+        if (l->isPowerSavingEnabled()) { // GPS Power Saving
+          if(active) {
+            if (enabled) {
+              unsigned long mins = (l->getNextSleep() - millis()) / 60000UL;
+              sprintf(reply, "on, powered (powersaving, sleep in %luh %lum), %s, %d sats", 
+                mins / 60UL, 
+                mins % 60UL,
+                fix ? "fix" : "no fix", 
+                sats);
+            } else {
+              unsigned long mins = (l->getNextWake() - millis()) / 60000UL;
+              sprintf(reply, "on, unpowered (powersaving, wake in %luh %lum)",
+                mins / 60UL,
+                mins % 60UL);
+            }
 
-          // "last sync" from GPS
-          DateTime dt = DateTime(l->getLastValidTimeSync());
-          if (dt.unixtime() == 0) {
-            sprintf(reply + strlen(reply), ", last sync: none");
+            // "last sync" from GPS
+            DateTime dt = DateTime(l->getLastValidTimeSync());
+            if (dt.unixtime() == 0) {
+              sprintf(reply + strlen(reply), ", last sync: none");
+            } else {
+              sprintf(reply + strlen(reply), ", last sync: %02d:%02d - %d/%d/%d UTC", dt.hour(), dt.minute(),
+                      dt.day(), dt.month(), dt.year());
+            }
           } else {
-            sprintf(reply + strlen(reply), ", last sync: %02d:%02d - %d/%d/%d UTC", dt.hour(), dt.minute(),
-                    dt.day(), dt.month(), dt.year());
+            sprintf(reply, "off, %s", enabled ? "powered" : "unpowered");
           }
         } else { // Normal mode
-          if (enabled) {
+          if(active) {
             sprintf(reply, "on, %s, %s, %d sats",
-              active?"active":"deactivated",
+              enabled?"powered":"unpowered",
               fix?"fix":"no fix",
               sats);
           } else {
-            strcpy(reply, "off");
+            sprintf(reply, "off, %s", enabled ? "powered" : "unpowered");
           }
         }
       } else {
@@ -438,12 +441,10 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, char* command, char* re
     } else if (memcmp(command, "powersaving on", 14) == 0) {
 #if defined(NRF52_PLATFORM)
       _prefs->powersaving_enabled = 1;
-      _sensors->powersaving_enabled = 1;
       savePrefs();
       strcpy(reply, "on - Immediate effect");
 #elif defined(ESP32) && !defined(WITH_BRIDGE)
       _prefs->powersaving_enabled = 1;
-      _sensors->powersaving_enabled = 1;
       savePrefs();
       strcpy(reply, "on - After 2 minutes");
 #elif defined(WITH_BRIDGE)
@@ -453,7 +454,6 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, char* command, char* re
 #endif
     } else if (memcmp(command, "powersaving off", 15) == 0) {
       _prefs->powersaving_enabled = 0;
-      _sensors->powersaving_enabled = 0;
       savePrefs();
       strcpy(reply, "off");
     } else if (memcmp(command, "powersaving", 11) == 0) {
