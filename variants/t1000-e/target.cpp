@@ -182,7 +182,7 @@ void T1000SensorManager::loop() {
         POWERSAVING_DEBUG_PRINTLN("GPS set. Enter sleep early");
       }
 
-      stop_gps();
+      sleep_gps();
     } else if (!gps_wake && ((int32_t)(millis() - _nmea->getNextWake()) >= 0)) { // Time to on
       POWERSAVING_DEBUG_PRINTLN("GPS sleep timeout. Wakeup.");
 
