@@ -88,26 +88,18 @@ void T1000SensorManager::start_gps() {
     _nmea->setNextSleep(); // Next time to off
   }
 
-  //_nmea->begin();
-  // this init sequence should be better 
-  // comes from seeed examples and deals with all gps pins
-  pinMode(GPS_EN, OUTPUT);
   digitalWrite(GPS_EN, HIGH);
   delay(10);
-  pinMode(GPS_VRTC_EN, OUTPUT);
   digitalWrite(GPS_VRTC_EN, HIGH);
   delay(10);
-       
-  pinMode(GPS_RESET, OUTPUT);
-  digitalWrite(GPS_RESET, HIGH);
-  delay(10);
   digitalWrite(GPS_RESET, LOW);
-       
-  pinMode(GPS_SLEEP_INT, OUTPUT);
+  delay(10);
   digitalWrite(GPS_SLEEP_INT, HIGH);
-  pinMode(GPS_RTC_INT, OUTPUT);
-  digitalWrite(GPS_RTC_INT, LOW);
-  pinMode(GPS_RESETB, INPUT_PULLUP);
+
+  digitalWrite(GPS_RTC_INT, HIGH); // Power up GPS from RTC sleep
+  delay(3);
+  digitalWrite(GPS_RTC_INT, HIGH);
+  delay(50);
 }
 
 void T1000SensorManager::sleep_gps() {
@@ -120,14 +112,7 @@ void T1000SensorManager::sleep_gps() {
     gps_wake = false; // When GPS is off, wake is false to be sure
   }
 
-  digitalWrite(GPS_VRTC_EN, HIGH);
   digitalWrite(GPS_EN, LOW);
-  digitalWrite(GPS_RESET, HIGH);
-  digitalWrite(GPS_SLEEP_INT, HIGH);
-  digitalWrite(GPS_RTC_INT, LOW);
-  pinMode(GPS_RESETB, OUTPUT);
-  digitalWrite(GPS_RESETB, LOW);
-  //_nmea->stop();
 }
 
 void T1000SensorManager::stop_gps() {
@@ -142,18 +127,23 @@ void T1000SensorManager::stop_gps() {
 
   digitalWrite(GPS_VRTC_EN, LOW);
   digitalWrite(GPS_EN, LOW);
-  digitalWrite(GPS_RESET, HIGH);
-  digitalWrite(GPS_SLEEP_INT, HIGH);
+  digitalWrite(GPS_RESET, LOW);
+  digitalWrite(GPS_SLEEP_INT, LOW);
   digitalWrite(GPS_RTC_INT, LOW);
-  pinMode(GPS_RESETB, OUTPUT);
-  digitalWrite(GPS_RESETB, LOW);
-  //_nmea->stop();
 }
 
 
 bool T1000SensorManager::begin() {
   // init GPS
   Serial1.begin(115200);
+
+  pinMode(GPS_EN, OUTPUT);
+  pinMode(GPS_VRTC_EN, OUTPUT);
+  pinMode(GPS_RESET, OUTPUT);
+  pinMode(GPS_SLEEP_INT, OUTPUT);
+  pinMode(GPS_RTC_INT, OUTPUT);
+  pinMode(GPS_RESETB, INPUT_PULLUP);
+  stop_gps(); // Start with GPS powered down
   return true;
 }
 
@@ -182,7 +172,7 @@ void T1000SensorManager::loop() {
         POWERSAVING_DEBUG_PRINTLN("GPS set. Enter sleep early");
       }
 
-      stop_gps();
+      sleep_gps();
     } else if (!gps_wake && ((int32_t)(millis() - _nmea->getNextWake()) >= 0)) { // Time to on
       POWERSAVING_DEBUG_PRINTLN("GPS sleep timeout. Wakeup.");
 
@@ -230,7 +220,7 @@ const char* T1000SensorManager::getSettingValue(int i) const {
 bool T1000SensorManager::setSettingValue(const char* name, const char* value) {
   if (strcmp(name, "gps") == 0) {
     if (strcmp(value, "0") == 0) {
-      sleep_gps(); // sleep for faster fix !
+      stop_gps();
     } else {
       start_gps();
     }
