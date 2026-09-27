@@ -80,12 +80,13 @@ mesh::LocalIdentity radio_new_identity() {
 }
 
 void T1000SensorManager::start_gps() {
-  gps_active = true;
-
   if (_nmea->isPowerSavingEnabled()) {
-    gps_wake = true;       // gps_active is true
+    gps_wake = true;       // gps_active is unchanged (true for GPS sleep, false for GPS off)
     _nmea->syncTime();     // Clear GPS data and force sync time
     _nmea->setNextSleep(); // Next time to off
+  } else {
+     gps_active = true;
+     gps_wake = true;
   }
 
   //_nmea->begin();
@@ -173,24 +174,28 @@ void T1000SensorManager::loop() {
   static long next_gps_update = 0;
 
   // PowerSaving
-  if (_nmea->isPowerSavingEnabled()) {
-    if (gps_wake && ((int32_t)(millis() - _nmea->getNextSleep()) >= 0 ||
-                      !_nmea->waitingTimeSync())) { // Time to off or GPS set
+  if (_nmea->isPowerSavingEnabled() && gps_active) {
+    // Handle change in PowerSaving mode
+    _nmea->updatePowerSavingSettings(gps_wake);
+
+    if (gps_wake) {
+      // GPS is awake: check whether it should sleep
       if ((int32_t)(millis() - _nmea->getNextSleep()) >= 0) {
         POWERSAVING_DEBUG_PRINTLN("GPS wake timeout. Enter sleep");
+        sleep_gps();
       } else if (!_nmea->waitingTimeSync()) {
         POWERSAVING_DEBUG_PRINTLN("GPS set. Enter sleep early");
+        sleep_gps();
       }
-
-      sleep_gps();
-    } else if (!gps_wake && ((int32_t)(millis() - _nmea->getNextWake()) >= 0)) { // Time to on
-      POWERSAVING_DEBUG_PRINTLN("GPS sleep timeout. Wakeup.");
-
-      start_gps();
-    } else if (!gps_wake && _nmea->waitingTimeSync()) { // On for "gps sync"
-      POWERSAVING_DEBUG_PRINTLN("CLI gps sync. Wakeup");
-
-      start_gps();
+    } else {
+      // GPS is asleep: check whether it should wake
+      if ((int32_t)(millis() - _nmea->getNextWake()) >= 0) {
+        POWERSAVING_DEBUG_PRINTLN("GPS sleep timeout. Wakeup.");
+        start_gps();
+      } else if (_nmea->waitingTimeSync()) {
+        POWERSAVING_DEBUG_PRINTLN("CLI gps sync. Wakeup");
+        start_gps();
+      }
     }
   }
 
