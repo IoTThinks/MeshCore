@@ -881,13 +881,12 @@ bool EnvironmentSensorManager::gpsIsAwake(uint8_t ioPin) {
 #endif
 
 void EnvironmentSensorManager::start_gps() {
-  gps_active = true;
-
   if (_location->isPowerSavingEnabled()) {
-    gps_wake = true;           // gps_active is true
+    gps_wake = true;           // gps_active is unchanged (true for GPS sleep, false for GPS off)
     _location->syncTime();     // Clear GPS data and force sync time
     _location->setNextSleep(); // Next time to off
   } else {
+     gps_active = true;
      gps_wake = true;
   }
 
@@ -946,8 +945,10 @@ void EnvironmentSensorManager::loop() {
   static long next_gps_update = 0;
 
   // PowerSaving
-  _location->updatePowerSavingSettings(gps_wake); // Handle change in PowerSaving mode
-  if (_location->isPowerSavingEnabled() && gps_detected) {
+  if (_location->isPowerSavingEnabled() && gps_detected && gps_active) {
+    // Handle change in PowerSaving mode
+    _location->updatePowerSavingSettings(gps_wake);
+
     if (gps_wake) {
       // GPS is awake: check whether it should sleep
       if ((int32_t)(millis() - _location->getNextSleep()) >= 0) {
