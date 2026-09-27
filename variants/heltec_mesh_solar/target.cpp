@@ -31,12 +31,13 @@ mesh::LocalIdentity radio_new_identity() {
 
 void SolarSensorManager::start_gps() {
   if (!gps_active) {
-    gps_active = true;
-
     if (_location->isPowerSavingEnabled()) {
-      gps_wake = true;       // gps_active is true
+      gps_wake = true;           // gps_active is true
       _location->syncTime();     // Clear GPS data and force sync time
       _location->setNextSleep(); // Next time to off
+    } else {
+      gps_active = true;
+      gps_wake = true;
     }
 
     _location->begin();
@@ -84,24 +85,28 @@ void SolarSensorManager::loop() {
   static long next_gps_update = 0;
 
   // PowerSaving
-  if (_location->isPowerSavingEnabled() && gps_detected) {
-    if (gps_wake && ((int32_t)(millis() - _location->getNextSleep()) >= 0 ||
-                      !_location->waitingTimeSync())) { // Time to off or GPS set
+  if (_location->isPowerSavingEnabled() && gps_detected && gps_active) {
+    // Handle change in PowerSaving mode
+    _location->updatePowerSavingSettings(gps_wake);
+
+    if (gps_wake) {
+      // GPS is awake: check whether it should sleep
       if ((int32_t)(millis() - _location->getNextSleep()) >= 0) {
         POWERSAVING_DEBUG_PRINTLN("GPS wake timeout. Enter sleep");
+        stop_gps();
       } else if (!_location->waitingTimeSync()) {
         POWERSAVING_DEBUG_PRINTLN("GPS set. Enter sleep early");
+        stop_gps();
       }
-
-      stop_gps();
-    } else if (!gps_wake && ((int32_t)(millis() - _location->getNextWake()) >= 0)) { // Time to on
-      POWERSAVING_DEBUG_PRINTLN("GPS sleep timeout. Wakeup.");
-
-      start_gps();
-    } else if (!gps_wake && _location->waitingTimeSync()) { // On for "gps sync"
-      POWERSAVING_DEBUG_PRINTLN("CLI gps sync. Wakeup");
-
-      start_gps();
+    } else {
+      // GPS is asleep: check whether it should wake
+      if ((int32_t)(millis() - _location->getNextWake()) >= 0) {
+        POWERSAVING_DEBUG_PRINTLN("GPS sleep timeout. Wakeup.");
+        start_gps();
+      } else if (_location->waitingTimeSync()) {
+        POWERSAVING_DEBUG_PRINTLN("CLI gps sync. Wakeup");
+        start_gps();
+      }
     }
   }
 
@@ -145,8 +150,10 @@ const char* SolarSensorManager::getSettingValue(int i) const {
 bool SolarSensorManager::setSettingValue(const char* name, const char* value) {
   if (gps_detected && strcmp(name, "gps") == 0) {
     if (strcmp(value, "0") == 0) {
+      gps_active = false; // Disabled by CLI or App
       stop_gps();
     } else {
+      gps_active = true; // Enabled by CLI or App
       start_gps();
     }
     return true;

@@ -85,8 +85,8 @@ void T1000SensorManager::start_gps() {
     _nmea->syncTime();     // Clear GPS data and force sync time
     _nmea->setNextSleep(); // Next time to off
   } else {
-     gps_active = true;
-     gps_wake = true;
+    gps_active = true;
+    gps_wake = true;
   }
 
   //_nmea->begin();

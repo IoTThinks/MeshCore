@@ -15,6 +15,7 @@
 
 class MeshTrackerX1SensorManager: public SensorManager {
   bool gps_active = false;
+  bool gps_wake = false;  // In PowerSaving, gps_active can have gps_wake true or false
   bool baro_ok = false;
   Adafruit_SPA06_003 spa06;
   LocationProvider * _nmea;
