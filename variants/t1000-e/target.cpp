@@ -235,8 +235,10 @@ const char* T1000SensorManager::getSettingValue(int i) const {
 bool T1000SensorManager::setSettingValue(const char* name, const char* value) {
   if (strcmp(name, "gps") == 0) {
     if (strcmp(value, "0") == 0) {
+      gps_active = false; // Disabled by CLI or App
       sleep_gps(); // sleep for faster fix !
     } else {
+      gps_active = true; // Enabled by CLI or App
       start_gps();
     }
     return true;
