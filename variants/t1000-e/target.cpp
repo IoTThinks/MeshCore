@@ -89,26 +89,8 @@ void T1000SensorManager::start_gps() {
     gps_wake = true;
   }
 
-  //_nmea->begin();
-  // this init sequence should be better 
-  // comes from seeed examples and deals with all gps pins
-  pinMode(GPS_EN, OUTPUT);
-  digitalWrite(GPS_EN, HIGH);
-  delay(10);
-  pinMode(GPS_VRTC_EN, OUTPUT);
-  digitalWrite(GPS_VRTC_EN, HIGH);
-  delay(10);
-       
-  pinMode(GPS_RESET, OUTPUT);
-  digitalWrite(GPS_RESET, HIGH);
-  delay(10);
-  digitalWrite(GPS_RESET, LOW);
-       
-  pinMode(GPS_SLEEP_INT, OUTPUT);
-  digitalWrite(GPS_SLEEP_INT, HIGH);
-  pinMode(GPS_RTC_INT, OUTPUT);
-  digitalWrite(GPS_RTC_INT, LOW);
-  pinMode(GPS_RESETB, INPUT_PULLUP);
+  digitalWrite(GPS_EN, GPS_EN_ACTIVE);
+  digitalWrite(GPS_RESET, !GPS_RESET_ACTIVE);
 }
 
 void T1000SensorManager::sleep_gps() {
@@ -121,14 +103,8 @@ void T1000SensorManager::sleep_gps() {
     gps_wake = false; // When GPS is off, wake is false to be sure
   }
 
-  digitalWrite(GPS_VRTC_EN, HIGH);
-  digitalWrite(GPS_EN, LOW);
-  digitalWrite(GPS_RESET, HIGH);
-  digitalWrite(GPS_SLEEP_INT, HIGH);
-  digitalWrite(GPS_RTC_INT, LOW);
-  pinMode(GPS_RESETB, OUTPUT);
-  digitalWrite(GPS_RESETB, LOW);
-  //_nmea->stop();
+  digitalWrite(GPS_EN, !GPS_EN_ACTIVE);
+  //digitalWrite(GPS_RESET, GPS_RESET_ACTIVE);  // For faster fix from sleep, do not reset
 }
 
 void T1000SensorManager::stop_gps() {
@@ -140,15 +116,8 @@ void T1000SensorManager::stop_gps() {
     gps_active = false;
     gps_wake = false; // When GPS is off, wake is false to be sure
   }
-
-  digitalWrite(GPS_VRTC_EN, LOW);
-  digitalWrite(GPS_EN, LOW);
-  digitalWrite(GPS_RESET, HIGH);
-  digitalWrite(GPS_SLEEP_INT, HIGH);
-  digitalWrite(GPS_RTC_INT, LOW);
-  pinMode(GPS_RESETB, OUTPUT);
-  digitalWrite(GPS_RESETB, LOW);
-  //_nmea->stop();
+  digitalWrite(GPS_EN, !GPS_EN_ACTIVE);
+  digitalWrite(GPS_RESET, GPS_RESET_ACTIVE);
 }
 
 
