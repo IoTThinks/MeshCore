@@ -69,7 +69,7 @@ static void applyRxPowerSavingConfig(NodePrefs& prefs, uint8_t sf, float bw) {
 #endif
 
 #ifndef GPS_READ_INTERVAL_SECS
-  #define GPS_READ_INTERVAL_SECS  60
+  #define GPS_READ_INTERVAL_SECS 60
 #endif
 
 /* ------------------------------ Code -------------------------------- */
@@ -209,7 +209,7 @@ uint8_t SensorMesh::handleRequest(uint8_t perms, uint32_t sender_timestamp, uint
     // query other sensors -- target specific
     if (sensors.getLocationProvider() != NULL &&
         sensors.getLocationProvider()->isPowerSavingEnabled() &&
-        getRTCClock()->getCurrentTime() - sensors.getLocationProvider()->getLastValidTimeSync() >= GPS_READ_INTERVAL_SECS)) {
+        getRTCClock()->getCurrentTime() - sensors.getLocationProvider()->getLastValidTimeSync() >= GPS_READ_INTERVAL_SECS) {
       sensors.getLocationProvider()->syncTime(); // Request for GPS sync if GPS is in PowerSaving if later than read interval
     }
     sensors.querySensors(0xFF & perm_mask, telemetry);  // allow all telemetry permissions for admin or guest
