@@ -286,7 +286,8 @@ static void applyCompanionRxPowerSaving(uint8_t sf, float bw) {
     control->setRxPowerSaving(false, RX_POWERSAVING_DEFAULT_RX_US,
                               RX_POWERSAVING_DEFAULT_SLEEP_US);
   }
-  MESH_DEBUG_PRINTLN("RX Power Saving: companion level=5,preamble=16,rx=%lu,sleep=%lu,%s",
+  MESH_DEBUG_PRINTLN("RX Power Saving: companion level=%u,preamble=%u,rx=%lu,sleep=%lu,%s",
+                     RX_POWERSAVING_BALANCED_LEVEL, RX_POWERSAVING_PROFILE_PREAMBLE,
                      (unsigned long)rx_us, (unsigned long)sleep_us,
                      ok ? "accepted" : "unavailable - continuous RX");
 #else
