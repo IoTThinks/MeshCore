@@ -964,13 +964,17 @@ MyMesh::MyMesh(mesh::MainBoard &board, mesh::Radio &radio, mesh::MillisecondCloc
   _prefs.rx_boosted_gain = 1; // enabled by default;
 #endif
 #endif
-  _prefs.radio_fem_rxgain = 1;
+  _prefs.radio_fem_rxgain = 0; // PowerSaving and better signal
   _prefs.radio_fem_txgain = 0;
 
   pending_discover_tag = 0;
   pending_discover_until = 0;
 
   memset(default_scope.key, 0, sizeof(default_scope.key));
+
+  // PowerSaving defaults
+  _prefs.powersaving_enabled = 1;
+
 }
 
 void MyMesh::begin(FILESYSTEM *fs) {

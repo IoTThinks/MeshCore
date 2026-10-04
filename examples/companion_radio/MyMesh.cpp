@@ -915,7 +915,7 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _prefs.tx_power_dbm = LORA_TX_POWER;
   _prefs.gps_enabled = 0;       // GPS disabled by default
   _prefs.gps_interval = 0;      // No automatic GPS updates by default
-  _prefs.radio_fem_rxgain = 1;
+  _prefs.radio_fem_rxgain = 0;  // PowerSaving and better signal
   _prefs.radio_fem_txgain = 0;
   //_prefs.rx_delay_base = 10.0f;  enable once new algo fixed
   _prefs.setRepeatEn(false);
@@ -926,7 +926,9 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _prefs.rx_boosted_gain = 1; // enabled by default
 #endif
 #endif
-  _prefs.powersaving_enabled = 1; // Power Saving enabled by default
+
+  // PowerSaving defaults
+  _prefs.powersaving_enabled = 1;
 }
 
 void MyMesh::begin(bool has_display) {
