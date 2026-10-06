@@ -699,8 +699,6 @@ MyMesh::MyMesh(mesh::MainBoard &board, mesh::Radio &radio, mesh::MillisecondCloc
   _prefs.rxps.enabled = 1;
   _prefs.rxps.level = 6;
   _prefs.rxps.preamble = 16;
-  _prefs.rxps.rx_us = 49329;
-  _prefs.rxps.sleep_us = 23757;
 }
 
 void MyMesh::begin(FILESYSTEM *fs) {
