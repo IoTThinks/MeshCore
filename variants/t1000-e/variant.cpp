@@ -89,9 +89,9 @@ void initVariant()
   digitalWrite(PIN_3V3_ACC_EN, LOW);
   digitalWrite(BUZZER_EN, LOW);
   digitalWrite(SENSOR_EN, LOW);
-  digitalWrite(GPS_EN, LOW);
-  digitalWrite(GPS_RESET, LOW);
-  digitalWrite(GPS_VRTC_EN, LOW);
+  digitalWrite(GPS_EN, !GPS_EN_ACTIVE);
+  digitalWrite(GPS_RESET, GPS_RESET_ACTIVE);
+  digitalWrite(GPS_VRTC_EN, HIGH);   // low power RTC block
   digitalWrite(GPS_SLEEP_INT, HIGH);
   digitalWrite(GPS_RTC_INT, LOW);
   digitalWrite(LED_PIN, LOW);
