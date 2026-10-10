@@ -64,3 +64,21 @@ const char* HeltecV4R8Board::getManufacturerName() const {
   return "Heltec V4 R8 OLED";
 #endif
 }
+
+bool HeltecV4R8Board::setLoRaFemLnaEnabled(bool enable) {
+  if (!loRaFEMControl.isLnaCanControl()) {
+    return false;
+  }
+
+  loRaFEMControl.setLNAEnable(enable);
+  loRaFEMControl.setRxModeEnable();
+  return true;
+}
+
+bool HeltecV4R8Board::canControlLoRaFemLna() const {
+  return true;
+}
+
+bool HeltecV4R8Board::isLoRaFemLnaEnabled() const {
+  return loRaFEMControl.isLNAEnabled();
+}
