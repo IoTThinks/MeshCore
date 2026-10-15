@@ -86,8 +86,9 @@ WioTrackerL1_room_server \
 Xiao_nrf52_room_server
 
 ############# Companions BLE #############
-# NRF52 - 22 boards
+# NRF52 - 23 boards
 sh build.sh build-firmware \
+GAT562_30S_Mesh_Kit_companion_radio_ble \
 Heltec_t096_companion_radio_ble_femon \
 Heltec_t096_companion_radio_ble_femoff \
 Heltec_t1_companion_radio_ble \
