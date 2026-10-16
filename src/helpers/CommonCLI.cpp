@@ -446,7 +446,7 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, char* command, char* re
 #elif defined(ESP32) && !defined(WITH_BRIDGE)
       _prefs->powersaving_enabled = 1;
       savePrefs();
-      strcpy(reply, "on - After 2 minutes");
+      strcpy(reply, "on - After 2 minutes. Serial console will be off.");
 #elif defined(WITH_BRIDGE)
       strcpy(reply, "Bridge not supported");
 #else
