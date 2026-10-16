@@ -46,7 +46,8 @@ public:
     return 0;
   }
 
-  void powerOff() override {
+  void shutdownPeripherals() override {
+    NRF52Board::shutdownPeripherals();
     #ifdef HAS_GPS
         digitalWrite(GPS_VRTC_EN, LOW);
         digitalWrite(GPS_RESET, LOW);
@@ -82,6 +83,5 @@ public:
     nrf_gpio_cfg_sense_input(BUTTON_PIN, NRF_GPIO_PIN_PULLDOWN, NRF_GPIO_PIN_SENSE_HIGH);
     #endif
 
-    sd_power_system_off();
   }
 };

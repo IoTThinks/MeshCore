@@ -10,7 +10,7 @@
 #define PERM_ACL_READ_WRITE    2
 #define PERM_ACL_ADMIN         3
 
-#define OUT_PATH_UNKNOWN  0xFF
+#include <helpers/OutPath.h>
 
 struct ClientInfo {
   mesh::Identity id;

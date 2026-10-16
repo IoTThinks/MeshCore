@@ -37,13 +37,25 @@
 #define BRIDGE_DEBUG_PRINTLN(...) {}
 #endif
 
+#if POWERSAVING_DEBUG && ARDUINO
+  #include <Arduino.h>
+  #define POWERSAVING_DEBUG_PRINT(F, ...) Serial.printf("POWERSAVING: " F, ##__VA_ARGS__)
+  #define POWERSAVING_DEBUG_PRINTLN(F, ...) Serial.printf("POWERSAVING: " F "\n", ##__VA_ARGS__)
+#else
+  #define POWERSAVING_DEBUG_PRINT(...) {}
+  #define POWERSAVING_DEBUG_PRINTLN(...) {}
+#endif
+
 namespace mesh {
 
 #define  BD_STARTUP_NORMAL     0  // getStartupReason() codes
 #define  BD_STARTUP_RX_PACKET  1
 
 class MainBoard {
+protected:
+  bool _ota_update_active = false;
 public:
+  virtual bool isOTAUpdateActive() const { return _ota_update_active; }
   virtual uint16_t getBattMilliVolts() = 0;
   virtual float getMCUTemperature() { return NAN; }
   virtual bool setAdcMultiplier(float multiplier) { return false; };
@@ -52,6 +64,8 @@ public:
   virtual void onBeforeTransmit() { }
   virtual void onAfterTransmit() { }
   virtual void reboot() = 0;
+  virtual void shutdownPeripherals() { }
+  virtual void enterDeepSleep(uint32_t secs) { if (secs == 0) powerOff(); }
   virtual void powerOff() { /* no op */ }
   // Called by example setup() functions to signal that boot is complete.
   // Boards may override to stop a boot-indicator LED sequence or similar.
@@ -59,6 +73,7 @@ public:
   virtual void onBootComplete() { /* no op */ }
   virtual uint32_t getIRQGpio() { return -1; } // not supported. Returns DIO1 (SX1262) and DIO0 (SX127x)
   virtual void sleep(uint32_t secs)  { /* no op */ }
+  virtual void sleepMillis(uint32_t ms) { if (ms) sleep(0); }
   virtual uint32_t getGpio() { return 0; }
   virtual void setGpio(uint32_t values) {}
   virtual uint8_t getStartupReason() const = 0;

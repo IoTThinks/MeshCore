@@ -1,4 +1,5 @@
 #include "SensorMesh.h"
+#include <helpers/IdleSleep.h>
 #include <helpers/RoutingPolicy.h>
 #include <helpers/sensors/LPPDataHelpers.h>
 
@@ -820,7 +821,7 @@ SensorMesh::SensorMesh(mesh::MainBoard& board, mesh::Radio& radio, mesh::Millise
   _prefs.gps_enabled = 0;
   _prefs.gps_interval = 0;
   _prefs.advert_loc_policy = ADVERT_LOC_PREFS;
-  _prefs.radio_fem_rxgain = 1;
+  _prefs.radio_fem_rxgain = RADIO_FEM_RXGAIN; // external RX LNA off unless the build or a saved value says otherwise
   _prefs.radio_fem_txgain = 0;
 
   memset(default_scope.key, 0, sizeof(default_scope.key));
@@ -856,6 +857,7 @@ void SensorMesh::begin(FILESYSTEM* fs) {
   }
 
   radio_driver.setParams(_prefs.freq, _prefs.bw, _prefs.sf, _prefs.cr);
+  _prefs.getRadioPrefs()->applyRxPowerSaving(_prefs.sf, _prefs.bw);
   radio_driver.setTxPower(_prefs.tx_power_dbm);
 
   board.attachDynamicPrefs(_prefs.getCustom());
@@ -1018,12 +1020,14 @@ void SensorMesh::loop() {
   if (set_radio_at && millisHasNowPassed(set_radio_at)) {   // apply pending (temporary) radio params
     set_radio_at = 0;  // clear timer
     radio_driver.setParams(pending_freq, pending_bw, pending_sf, pending_cr);
+    _prefs.getRadioPrefs()->applyRxPowerSaving(pending_sf, pending_bw);
     MESH_DEBUG_PRINTLN("Temp radio params");
   }
 
   if (revert_radio_at && millisHasNowPassed(revert_radio_at)) {   // revert radio params to orig
     revert_radio_at = 0;  // clear timer
     radio_driver.setParams(_prefs.freq, _prefs.bw, _prefs.sf, _prefs.cr);
+    _prefs.getRadioPrefs()->applyRxPowerSaving(_prefs.sf, _prefs.bw);
     MESH_DEBUG_PRINTLN("Radio params restored");
   }
 
@@ -1113,4 +1117,21 @@ void SensorMesh::loop() {
     acl.save(_fs);
     dirty_contacts_expiry = 0;
   }
+}
+
+bool SensorMesh::hasPendingWork() const {
+  return _mgr->getOutboundTotal() > 0 || _mgr->getInboundTotal() > 0 ||  // rxdelay packets wait in the inbound queue
+         isTransmitting() || _prefs.getRadioPrefs()->isRxPowerSavingCalibrationActive();
+}
+
+uint32_t SensorMesh::getSleepBudgetMillis() {
+  IdleSleepBudget budget(millis());
+  budget.until(next_local_advert); budget.until(next_flood_advert);
+  budget.until(set_radio_at); budget.until(revert_radio_at);
+  budget.until(dirty_contacts_expiry);
+  for (int i = 0; i < num_alert_tasks; i++) budget.until(alert_tasks[i]->send_expiry);
+  uint32_t now_secs = getRTCClock()->getCurrentTime();
+  if (now_secs >= last_read_time + SENSOR_READ_INTERVAL_SECS) return 0;
+  budget.until(millis() + (last_read_time + SENSOR_READ_INTERVAL_SECS - now_secs) * 1000UL);  // next sensor read
+  return budget.millis();
 }

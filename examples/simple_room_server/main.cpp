@@ -1,7 +1,10 @@
+#include <helpers/PeriodicReboot.h>
+static PeriodicReboot periodic_reboot;
 #include <Arduino.h>   // needed for PlatformIO
 #include <Mesh.h>
 
 #include "MyMesh.h"
+#include <helpers/RoleSleep.h>
 
 #ifdef ETHERNET_ENABLED
   #define ETHERNET_CLI_BANNER "MeshCore Room Server CLI"
@@ -166,4 +169,12 @@ void loop() {
 #ifdef HAS_EXTERNAL_WATCHDOG
   external_watchdog.loop();
 #endif
+  if (periodic_reboot.due(the_mesh.getNodePrefs()->reboot_interval, millis(),
+                         the_mesh.isTransmitting(), board.isOTAUpdateActive())) {
+    board.reboot();
+  }
+  sleepRoleIfIdle(the_mesh.getNodePrefs()->powersaving_enabled,
+                  the_mesh.hasPendingWork(), command[0] != 0,
+                  the_mesh.getSleepBudgetMillis());
+
 }

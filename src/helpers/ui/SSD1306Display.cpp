@@ -18,36 +18,44 @@ ColorVal UIColor::popup_txt = SSD1306_WHITE;
 ColorVal UIColor::corp_blue = SSD1306_WHITE;
 
 bool SSD1306Display::begin() {
-  if (!_isOn) {
-    if (_peripher_power) _peripher_power->claim();
-    _isOn = true;
+  if (!_isOn && _peripher_power) _peripher_power->claim();
+  const bool ok = display.begin(SSD1306_SWITCHCAPVCC, DISPLAY_ADDRESS, true, false)
+                  && i2c_probe(Wire, DISPLAY_ADDRESS);
+  if (!ok) {
+    if (_peripher_power) _peripher_power->release();
+    _isOn = false;
+    return false;
   }
-  #ifdef DISPLAY_ROTATION
+#ifdef DISPLAY_ROTATION
   display.setRotation(DISPLAY_ROTATION);
-  #endif
-  return display.begin(SSD1306_SWITCHCAPVCC, DISPLAY_ADDRESS, true, false) && i2c_probe(Wire, DISPLAY_ADDRESS);
+#endif
+  _isOn = true;
+  return true;
 }
 
 void SSD1306Display::turnOn() {
   if (!_isOn) {
-    if (_peripher_power) _peripher_power->claim();
-    _isOn = true;  // set before begin() to prevent double claim
-    if (_peripher_power) begin();  // re-init display after power was cut
+    if (_peripher_power) {
+      if (!begin()) return;  // power was cut: claim it and re-init; released again if no display answers
+    } else {
+      // No switched supply, so the panel kept its state. A full begin() would also pulse
+      // PIN_OLED_RESET, which defaults to 21 = SX126X_POWER_EN (FEM enable) on RAK3401.
+      _isOn = true;
+    }
   }
   display.ssd1306_command(SSD1306_DISPLAYON);
 }
 
 void SSD1306Display::turnOff() {
+  if (!_isOn) return;
   display.ssd1306_command(SSD1306_DISPLAYOFF);
-  if (_isOn) {
-    if (_peripher_power) {
+  if (_peripher_power) {
 #if PIN_OLED_RESET >= 0
-      digitalWrite(PIN_OLED_RESET, LOW);
+    digitalWrite(PIN_OLED_RESET, LOW);
 #endif
-      _peripher_power->release();
-    }
-    _isOn = false;
+    _peripher_power->release();
   }
+  _isOn = false;
 }
 
 void SSD1306Display::clear() {

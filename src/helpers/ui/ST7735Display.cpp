@@ -417,16 +417,51 @@ bool ST7735Display::i2c_probe(TwoWire& wire, uint8_t addr) {
   #define PIN_TFT_LEDA_CTL_ACTIVE  HIGH
 #endif
 
-// Color scheme
-ColorVal UIColor::window_bkg = ST77XX_WHITE;
-ColorVal UIColor::title_bkg = ST77XX_BLUE;
-ColorVal UIColor::title_txt = ST77XX_WHITE;
-ColorVal UIColor::primary_txt = ST77XX_BLACK;
-ColorVal UIColor::secondary_txt = (18 << 11) | (36 << 5) | 18;  // mid-gray
-ColorVal UIColor::warning_txt = ST77XX_ORANGE;
-ColorVal UIColor::popup_bkg = ST77XX_CYAN;
-ColorVal UIColor::popup_txt = ST77XX_BLACK;
-ColorVal UIColor::corp_blue = 0x001A;
+// Color scheme - Dark theme before v1.17
+ColorVal UIColor::window_bkg = ST77XX_BLACK;
+ColorVal UIColor::title_bkg = ST77XX_BLACK;
+ColorVal UIColor::title_txt = ST77XX_GREEN;
+ColorVal UIColor::primary_txt = ST77XX_GREEN;
+ColorVal UIColor::secondary_txt = ST77XX_YELLOW;
+ColorVal UIColor::warning_txt = ST77XX_RED;
+ColorVal UIColor::popup_bkg = ST77XX_BLACK;
+ColorVal UIColor::popup_txt = ST77XX_WHITE;
+ColorVal UIColor::corp_blue = ST77XX_BLUE;
+
+#ifdef NRF52_PLATFORM
+  #include <nrf_gpio.h>
+#endif
+
+// Move SCK/MOSI between the SPI peripheral and plain inputs without touching the bus.
+// On Tracker V2 and Wireless Tracker the LoRa radio shares this SPI peripheral (HSPI), and
+// SPIClass::end() gates its clock, so the radio's next transfer would never complete.
+// pinMode() alone cannot restore them: ESP32 routes the pin back to plain GPIO, and nRF52
+// drops the SCK input buffer that SPIM needs.
+static void attachSpiPins() {
+#ifdef ESP_PLATFORM
+  spiAttachSCK(_spi->bus(), PIN_TFT_SCL);
+  spiAttachMOSI(_spi->bus(), PIN_TFT_SDA);
+#elif defined(NRF52_PLATFORM)
+  // same configuration as SPIClass::begin()
+  nrf_gpio_cfg(g_ADigitalPinMap[PIN_TFT_SCL], NRF_GPIO_PIN_DIR_OUTPUT, NRF_GPIO_PIN_INPUT_CONNECT,
+               NRF_GPIO_PIN_NOPULL, NRF_GPIO_PIN_H0H1, NRF_GPIO_PIN_NOSENSE);
+  nrf_gpio_cfg(g_ADigitalPinMap[PIN_TFT_SDA], NRF_GPIO_PIN_DIR_OUTPUT, NRF_GPIO_PIN_INPUT_DISCONNECT,
+               NRF_GPIO_PIN_NOPULL, NRF_GPIO_PIN_H0H1, NRF_GPIO_PIN_NOSENSE);
+#else
+  pinMode(PIN_TFT_SCL, OUTPUT);
+  pinMode(PIN_TFT_SDA, OUTPUT);
+#endif
+}
+
+static void detachSpiPins() {
+#ifdef ESP_PLATFORM
+  spiDetachSCK(_spi->bus(), PIN_TFT_SCL);
+  spiDetachMOSI(_spi->bus(), PIN_TFT_SDA);
+#else
+  pinMode(PIN_TFT_SCL, INPUT);
+  pinMode(PIN_TFT_SDA, INPUT);
+#endif
+}
 
 bool ST7735Display::begin() {
   if (!sprite) {
@@ -512,6 +547,14 @@ void ST7735Display::_resetAndInit() {
 void ST7735Display::turnOn() {
   if (!_isOn) {
     if (_peripher_power) _peripher_power->claim();
+
+    // Restore GPIOs
+    pinMode(PIN_TFT_CS, OUTPUT);
+    pinMode(PIN_TFT_DC, OUTPUT);
+    pinMode(PIN_TFT_RST, OUTPUT);
+    pinMode(PIN_TFT_LEDA_CTL, OUTPUT);
+    attachSpiPins();
+
     _resetAndInit();
     sendCommand(ST77XX_DISPON);
 
@@ -525,9 +568,17 @@ void ST7735Display::turnOff() {
   if (_isOn) {
     sendCommand(ST77XX_DISPOFF);
 
-    //digitalWrite(PIN_TFT_RST, LOW);
+    // digitalWrite(PIN_TFT_RST, LOW);
     // Now turn off the backlight
     digitalWrite(PIN_TFT_LEDA_CTL, !PIN_TFT_LEDA_CTL_ACTIVE);
+
+    // Stop the signal pins from powering the display after its supply is cut.
+    pinMode(PIN_TFT_CS, INPUT);
+    pinMode(PIN_TFT_DC, INPUT);
+    detachSpiPins();
+    pinMode(PIN_TFT_RST, INPUT);
+    pinMode(PIN_TFT_LEDA_CTL, INPUT);
+
     _isOn = false;
 
     if (_peripher_power) _peripher_power->release();

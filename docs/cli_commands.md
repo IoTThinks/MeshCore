@@ -285,9 +285,12 @@ This document provides an overview of CLI commands that can be sent to MeshCore 
 **Parameters:**
 - `state`: `on`|`off`
 
+**Default:** `off` for fresh installs; a build with `-D RADIO_FEM_RXGAIN=1` defaults to `on`. A saved setting wins.
+
 **Notes:**
 - This controls the external LoRa FEM receive-path LNA where the board supports it.
 - This is separate from `radio.rxgain`, which controls the radio chip receive gain mode.
+- Boards without a controllable LNA answer `Error: unsupported`.
 
 ---
 
@@ -445,7 +448,7 @@ This document provides an overview of CLI commands that can be sent to MeshCore 
 
 ---
 
-#### View or change this node's power saving flag (Repeater Only)
+#### View or change this node's power saving flag (Repeater, room server, sensor and companion)
 **Usage:**
 - `powersaving`
 - `powersaving on`
@@ -455,9 +458,11 @@ This document provides an overview of CLI commands that can be sent to MeshCore 
 - `on`: enable power saving
 - `off`: disable power saving
 
-**Default:** `off`
+**Default:** `on` for fresh installs
 
 **Note:** When enabled, device enters sleep mode between radio transmissions
+
+**Companion:** on ESP32 the flag switches automatic light sleep at once (no reboot). Light sleep stays off on USB-serial, hardware-serial, Ethernet and ESP-NOW builds, and while a WiFi network is configured; those builds still scale the CPU clock (80/40 MHz). ESP32-C6 uses the upstream Arduino 3.x core without power management, so it gets neither. nRF52 companions sleep between events regardless of the flag.
 
 ---
 
@@ -1196,3 +1201,35 @@ Ethernet support is available on RAK4631 boards with a RAK13800 (W5100S) Etherne
 - Connect with any TCP client (e.g. `nc`, PuTTY) to access the same CLI available over serial.
 
 ---
+
+### Periodic reboot
+
+`get reboot.interval` / `set reboot.interval <0-255>`: hours since boot (0 disables). Repeater, Room Server and Sensor persist this setting. A due reboot waits for current TX and an active OTA session to finish.
+
+---
+
+### RX power saving (RXPS)
+
+Repeater, Room Server, Sensor and Companion. SX1262 and LR1110 receive in a duty cycle; LR1121, LR2021 and SX127x stay in continuous RX (`supported=no`).
+
+- `get radio.rxps`: `desired` (saved on/off), `effective` (`armed` or `continuous`), `supported`, `err` (last error), `fail` (arm failures), `level`, `catch` (preamble symbols still caught), `preamble`, `rx`/`sleep` (µs). `erx`/`eslp` appear when the driver had to clamp the periods.
+- `set radio.rxps off|on|conservative|balanced|max|overdrive|riskyWorkingMax`: `on` = `conservative` = level 3; `balanced` = level 6; `max` = level 8; `overdrive` (9) and `riskyWorkingMax` (10) run outside the datasheet timing rule.
+- `set radio.rxps level <1-10> [preamble <16|32>]`, `set radio.rxps max|overdrive|riskyWorkingMax preamble <16|32>`
+- `set radio.rxps <rx_us> <sleep_us>`: manual periods, 1000–30000000 µs, kept across SF/BW changes.
+
+**Default:** Balanced (level 6, preamble 16) for fresh installs. A saved setting, including `off`, wins.
+
+**Errors:** a profile that does not fit the active SF/BW is rejected, or, after a radio change, leaves the node in continuous RX with `err=-10001` while the saved choice is kept. Other nonzero `err` values come from the radio driver; after three failed arm attempts the node stays in continuous RX until the setting changes. `set radio` takes effect at reboot; until then the windows of the running modulation stay in use.
+
+---
+
+### Repeater return path (outpath)
+
+Remote admin console of a Repeater only; the command needs the requesting client, so it fails on the local serial console.
+
+- `get outpath`
+- `set outpath flood|direct|clear`
+- `set outpath <hop>,<hop>,...`: 1-, 2- or 3-byte hop hashes, e.g. `set outpath 12,34` or `set outpath aabbcc,ddeeff`.
+
+The path applies to replies to this client. `flood` survives reboot, login and learned PATH messages; `direct` and a hop list are replaced when the client logs in again by flood or a new PATH arrives; `clear` returns to automatic path learning. Saved with the ACL about 5 s later.
+

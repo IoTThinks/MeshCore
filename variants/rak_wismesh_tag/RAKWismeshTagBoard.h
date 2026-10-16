@@ -40,7 +40,8 @@ public:
     return "RAK WisMesh Tag";
   }
 
-  void powerOff() override {
+  void shutdownPeripherals() override {
+    NRF52Board::shutdownPeripherals();
     #ifdef BUZZER_EN
         digitalWrite(BUZZER_EN, LOW);
     #endif
@@ -69,6 +70,5 @@ public:
     nrf_gpio_cfg_sense_input(digitalPinToInterrupt(BUTTON_PIN), NRF_GPIO_PIN_PULLUP, NRF_GPIO_PIN_SENSE_LOW);
     #endif
 
-    NRF52Board::powerOff();
   }
 };

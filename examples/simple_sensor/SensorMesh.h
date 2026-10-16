@@ -51,6 +51,8 @@ public:
   SensorMesh(mesh::MainBoard& board, mesh::Radio& radio, mesh::MillisecondClock& ms, mesh::RNG& rng, mesh::RTCClock& rtc, mesh::MeshTables& tables);
   void begin(FILESYSTEM* fs);
   void loop();
+  bool hasPendingWork() const;
+  uint32_t getSleepBudgetMillis();
   void handleCommand(ClientInfo* from, uint32_t sender_timestamp, char* command, char* reply);
 
   // CommonCLI callbacks

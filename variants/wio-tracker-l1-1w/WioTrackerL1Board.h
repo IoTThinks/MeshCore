@@ -41,8 +41,8 @@ public:
     return "Seeed Wio Tracker L1";
   }
 
-  void powerOff() override {
+  void shutdownPeripherals() override {  // powerOff() and timed enterDeepSleep() both come here
     setLoRaFemPaGainEnabled(false);   // turn Off PA
-    NRF52Board::powerOff();
+    NRF52Board::shutdownPeripherals();
   }
 };

@@ -229,4 +229,6 @@ public:
   void clearStats() override;
   void handleCommand(uint32_t sender_timestamp, char* command, char* reply);
   void loop();
+  bool hasPendingWork() const;
+  uint32_t getSleepBudgetMillis();
 };

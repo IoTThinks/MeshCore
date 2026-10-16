@@ -106,6 +106,13 @@ void UITask::renderCurrScreen() {
     _display->setCursor(0, 30);
     sprintf(tmp, "BW: %03.2f CR: %d", _node_prefs->bw, _node_prefs->cr);
     _display->print(tmp);
+
+    _display->setCursor(0, 40);
+    const unsigned mv = _board->getBattMilliVolts();
+    snprintf(tmp, sizeof(tmp), "BAT: %u.%03u V", mv / 1000, mv % 1000);
+    _display->print(tmp);
+    _display->setCursor(0, 50);
+    _display->print(_node_prefs->powersaving_enabled ? "PowerSaving: ON" : "PowerSaving: off");
   }
 }
 

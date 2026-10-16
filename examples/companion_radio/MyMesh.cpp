@@ -925,7 +925,7 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _prefs.tx_power_dbm = LORA_TX_POWER;
   _prefs.gps_enabled = 0;       // GPS disabled by default
   _prefs.gps_interval = 0;      // No automatic GPS updates by default
-  _prefs.radio_fem_rxgain = 1;
+  _prefs.radio_fem_rxgain = RADIO_FEM_RXGAIN; // external RX LNA off unless the build or a saved value says otherwise
 #ifdef RADIO_FEM_TXGAIN
   _prefs.radio_fem_txgain = RADIO_FEM_TXGAIN;   // board-specific default for PA
 #else
@@ -940,6 +940,8 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _prefs.rx_boosted_gain = 1; // enabled by default
 #endif
 #endif
+
+  _prefs.powersaving_enabled = 1;  // fresh installs; a saved power.pwr_sav_en overrides it
 }
 
 void MyMesh::begin() {
@@ -1003,6 +1005,7 @@ void MyMesh::begin() {
   _store->loadChannels(this);
 
   radio_driver.setParams(_prefs.freq, _prefs.bw, _prefs.sf, _prefs.cr);
+  _prefs.getRadioPrefs()->applyRxPowerSaving(_prefs.sf, _prefs.bw);
   radio_driver.setTxPower(_prefs.tx_power_dbm);
   radio_driver.setRxBoostedGainMode(_prefs.rx_boosted_gain);
 
@@ -1448,6 +1451,7 @@ void MyMesh::handleCmdFrame(size_t len) {
       savePrefs();
 
       radio_driver.setParams(_prefs.freq, _prefs.bw, _prefs.sf, _prefs.cr);
+      _prefs.getRadioPrefs()->applyRxPowerSaving(_prefs.sf, _prefs.bw);
       MESH_DEBUG_PRINTLN("OK: CMD_SET_RADIO_PARAMS: f=%d, bw=%d, sf=%d, cr=%d", freq, bw, (uint32_t)sf,
                          (uint32_t)cr);
 
@@ -2181,6 +2185,17 @@ bool MyMesh::handleCommand(const char* command, uint32_t sender_timestamp, char*
   }
 #endif
 
+  if (strcmp(command, "powersaving on") == 0 || strcmp(command, "powersaving off") == 0) {
+    _prefs.powersaving_enabled = strcmp(command, "powersaving on") == 0 ? 1 : 0;
+    savePrefs();
+    strcpy(reply, _prefs.powersaving_enabled ? "on" : "off");
+    return true;
+  }
+  if (strcmp(command, "powersaving") == 0) {
+    strcpy(reply, _prefs.powersaving_enabled ? "on" : "off");
+    return true;
+  }
+
   if (strcmp(command, "board") == 0) {
     strcpy(reply, board.getManufacturerName());
     return true;
@@ -2450,5 +2465,5 @@ bool MyMesh::advert() {
 
 // To check if there is pending work
 bool MyMesh::hasPendingWork() const {
-  return _mgr->getOutboundTotal() > 0 || dirty_contacts_expiry != 0;
+  return _mgr->getOutboundTotal() > 0 || dirty_contacts_expiry != 0 || isTransmitting() || _prefs.getRadioPrefs()->isRxPowerSavingCalibrationActive();
 }

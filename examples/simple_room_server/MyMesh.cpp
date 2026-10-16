@@ -1,4 +1,5 @@
 #include "MyMesh.h"
+#include <helpers/IdleSleep.h>
 
 #define REPLY_DELAY_MILLIS          1500
 #define PUSH_NOTIFY_DELAY_MILLIS    2000
@@ -681,7 +682,7 @@ MyMesh::MyMesh(mesh::MainBoard &board, mesh::Radio &radio, mesh::MillisecondCloc
   _prefs.rx_boosted_gain = 1; // enabled by default;
 #endif
 #endif
-  _prefs.radio_fem_rxgain = 1;
+  _prefs.radio_fem_rxgain = RADIO_FEM_RXGAIN; // external RX LNA off unless the build or a saved value says otherwise
   _prefs.radio_fem_txgain = 0;
 
   next_post_idx = 0;
@@ -723,6 +724,7 @@ void MyMesh::begin(FILESYSTEM *fs) {
   }
 
   radio_driver.setParams(_prefs.freq, _prefs.bw, _prefs.sf, _prefs.cr);
+  _prefs.getRadioPrefs()->applyRxPowerSaving(_prefs.sf, _prefs.bw);
   radio_driver.setTxPower(_prefs.tx_power_dbm);
   radio_driver.setRxBoostedGainMode(_prefs.rx_boosted_gain);
 
@@ -1057,12 +1059,14 @@ void MyMesh::loop() {
   if (set_radio_at && millisHasNowPassed(set_radio_at)) { // apply pending (temporary) radio params
     set_radio_at = 0;                                     // clear timer
     radio_driver.setParams(pending_freq, pending_bw, pending_sf, pending_cr);
+    _prefs.getRadioPrefs()->applyRxPowerSaving(pending_sf, pending_bw);
     MESH_DEBUG_PRINTLN("Temp radio params");
   }
 
   if (revert_radio_at && millisHasNowPassed(revert_radio_at)) { // revert radio params to orig
     revert_radio_at = 0;                                        // clear timer
     radio_driver.setParams(_prefs.freq, _prefs.bw, _prefs.sf, _prefs.cr);
+    _prefs.getRadioPrefs()->applyRxPowerSaving(_prefs.sf, _prefs.bw);
     MESH_DEBUG_PRINTLN("Radio params restored");
   }
 
@@ -1078,4 +1082,18 @@ void MyMesh::loop() {
   uint32_t now = millis();
   uptime_millis += now - last_millis;
   last_millis = now;
+}
+
+bool MyMesh::hasPendingWork() const {
+  return _mgr->getOutboundTotal() > 0 || _mgr->getInboundTotal() > 0 ||  // rxdelay packets wait in the inbound queue
+         isTransmitting() || _prefs.getRadioPrefs()->isRxPowerSavingCalibrationActive();
+}
+
+uint32_t MyMesh::getSleepBudgetMillis() {
+  IdleSleepBudget budget(millis());
+  budget.until(next_local_advert); budget.until(next_flood_advert);
+  budget.until(set_radio_at); budget.until(revert_radio_at);
+  budget.until(dirty_contacts_expiry);
+  if (acl.getNumClients() > 0) budget.until(next_push);
+  return budget.millis();
 }

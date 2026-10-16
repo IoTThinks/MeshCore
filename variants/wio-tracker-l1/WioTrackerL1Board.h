@@ -34,7 +34,4 @@ public:
     return "Seeed Wio Tracker L1";
   }
 
-  void powerOff() override {
-    NRF52Board::powerOff();
-  }
 };

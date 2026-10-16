@@ -37,7 +37,8 @@ public:
     return "Seeed SenseCap Solar";
   }
 
-  void powerOff() override {
+  void shutdownPeripherals() override {
+    NRF52Board::shutdownPeripherals();
     digitalWrite(LED_WHITE, LOW);
     digitalWrite(LED_BLUE, LOW);
 
@@ -51,7 +52,11 @@ public:
     nrf_gpio_cfg_sense_input(digitalPinToInterrupt(g_ADigitalPinMap[PIN_BUTTON1]), NRF_GPIO_PIN_PULLUP, NRF_GPIO_PIN_SENSE_LOW);
 #endif
 
+  }
+
+  void powerOff() override {
 #ifdef NRF52_POWER_MANAGEMENT
+    shutdownPeripherals();
     initiateShutdown(SHUTDOWN_REASON_USER);
 #else
     NRF52Board::powerOff();

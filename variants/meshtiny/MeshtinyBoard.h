@@ -34,7 +34,8 @@ public:
 
   void reboot() override { NVIC_SystemReset(); }
 
-  void powerOff() override {
+  void shutdownPeripherals() override {
+    NRF52Board::shutdownPeripherals();
 
 #ifdef PIN_USER_BTN
     while (digitalRead(PIN_USER_BTN) == LOW) {
@@ -60,7 +61,6 @@ public:
     nrf_gpio_cfg_sense_input(g_ADigitalPinMap[PIN_USER_BTN], NRF_GPIO_PIN_PULLUP, NRF_GPIO_PIN_SENSE_LOW);
 #endif
 
-    NRF52Board::powerOff();
   }
 
 };

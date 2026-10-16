@@ -12,6 +12,7 @@
 #include <SPIFFS.h>
 
 bool ESP32Board::startOTAUpdate(const char* id, char reply[]) {
+  _ota_update_active = true;
   inhibit_sleep = true;   // prevent sleep during OTA
   WiFi.softAP("MeshCore-OTA", NULL);
 
@@ -49,7 +50,7 @@ void ESP32Board::powerOff() {
   enterDeepSleep(0); // Do not wakeup
 }
 
-void ESP32Board::enterDeepSleep(uint32_t secs) {
+void ESP32Board::shutdownPeripherals() {
   // Power off the display if any
 #ifdef DISPLAY_CLASS
   display.turnOff();
@@ -59,11 +60,13 @@ void ESP32Board::enterDeepSleep(uint32_t secs) {
   radio_driver.powerOff();
 
   // Keep LoRa inactive during deepsleep
+#ifdef P_LORA_NSS  // not defined for ESP-NOW-only boards
   digitalWrite(P_LORA_NSS, HIGH);
 #if defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6)
   gpio_hold_en((gpio_num_t)P_LORA_NSS);
 #else
   rtc_gpio_hold_en((gpio_num_t)P_LORA_NSS);
+#endif
 #endif
 
   // Power off GPS if any
@@ -74,6 +77,11 @@ void ESP32Board::enterDeepSleep(uint32_t secs) {
   // Flush serial buffers
   Serial.flush();
   delay(100);
+
+}
+
+void ESP32Board::enterDeepSleep(uint32_t secs) {
+  shutdownPeripherals();
 
   // Clear stale wakeup sources to avoid ghost wakeup
   // This is required when Power Management and automatic lightsleep are enabled

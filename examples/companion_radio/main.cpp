@@ -2,6 +2,11 @@
 #include <Mesh.h>
 #include "MyMesh.h"
 
+#ifdef ESP32_PLATFORM
+#include "esp_pm.h"
+#include "esp_bt.h"
+#endif
+
 // Believe it or not, this std C function is busted on some platforms!
 static uint32_t _atoi(const char* sp) {
   uint32_t n = 0;
@@ -130,6 +135,44 @@ void halt() {
   char wifi_pwd[64] = WIFI_PWD;
   bool wifi_was_connected = false;
   bool wifi_enabled = false;   // set at boot from prefs; false also when the effective SSID is blank
+#endif
+
+#if defined(ESP32_PLATFORM)
+// ESP32 power management: frequency scaling, plus automatic light sleep while
+// powersaving is on and nothing needs the CPU clock running.
+static void applyCompanionPowerSaving() {
+  bool light_sleep = the_mesh.getNodePrefs()->powersaving_enabled != 0;
+#ifndef WRAPPER_CLASS
+  light_sleep = false;  // ESP-NOW: the Wi-Fi receiver is the mesh radio
+#endif
+#if (defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT) || defined(ENABLE_USB_INTERFACE)
+  light_sleep = false;  // USB CDC serial does not survive automatic light sleep
+#endif
+#if defined(SERIAL_RX) || defined(ETHERNET_ENABLED)
+  light_sleep = false;  // UART RX and the Ethernet INT pin cannot wake the CPU
+#endif
+#ifdef ENABLE_WIFI_INTERFACE
+  if (wifi_enabled && wifi_ssid[0]) light_sleep = false;  // WiFi is up: keep the modem awake
+#endif
+
+#if CONFIG_IDF_TARGET_ESP32C3
+  esp_pm_config_esp32c3_t pm_config;
+#elif CONFIG_IDF_TARGET_ESP32S3
+  esp_pm_config_esp32s3_t pm_config;
+#elif CONFIG_IDF_TARGET_ESP32
+  esp_pm_config_esp32_t pm_config;
+#else
+  esp_pm_config_t pm_config;
+#endif
+  pm_config = { .max_freq_mhz = 80, .min_freq_mhz = 40, .light_sleep_enable = light_sleep };
+
+  esp_err_t err = esp_pm_configure(&pm_config);
+  if (err == ESP_OK) {
+    POWERSAVING_DEBUG_PRINTLN("Power management configured, light sleep %s", light_sleep ? "on" : "off");
+  } else {
+    Serial.printf("Power Management failed to configure: %d\r\n", err);
+  }
+}
 #endif
 
 void setup() {
@@ -287,6 +330,13 @@ void setup() {
 #endif
 
   board.onBootComplete();
+
+#if defined(ESP32_PLATFORM)
+  #if defined(BLE_PIN_CODE) && !CONFIG_IDF_TARGET_ESP32C6
+  esp_bt_sleep_enable();  // let the BLE controller sleep between connection events
+  #endif
+  applyCompanionPowerSaving();
+#endif
 }
 
 void loop() {
@@ -305,8 +355,21 @@ void loop() {
   if (!the_mesh.hasPendingWork()) {
 #if defined(NRF52_PLATFORM)
     board.sleep(0); // nrf ignores seconds param, sleeps whenever possible
+#elif defined(ESP32_PLATFORM)
+    if (the_mesh.getNodePrefs()->powersaving_enabled &&
+        !interface_manager.isReadBusy() && !interface_manager.isWriteBusy()) {
+      vTaskDelay(pdMS_TO_TICKS(10));  // yield to the idle task: lower clock, or light sleep when enabled
+    }
 #endif
   }
+
+#if defined(ESP32_PLATFORM)
+  static uint8_t applied_powersaving = the_mesh.getNodePrefs()->powersaving_enabled;
+  if (the_mesh.getNodePrefs()->powersaving_enabled != applied_powersaving) {  // changed via CLI
+    applied_powersaving = the_mesh.getNodePrefs()->powersaving_enabled;
+    applyCompanionPowerSaving();
+  }
+#endif
 
 #ifdef ENABLE_WIFI_INTERFACE
   if (wifi_enabled) {

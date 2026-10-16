@@ -1,3 +1,5 @@
+#include <helpers/Uptime.h>
+static Uptime ui_uptime;
 #include "UITask.h"
 #include <helpers/TxtDataHelpers.h>
 #include "../MyMesh.h"
@@ -123,7 +125,8 @@ class HomeScreen : public UIScreen {
   bool discovery_disp_names = true; // by default desplay names if available (removes SNR_O)
 #endif
 
-  void renderBatteryIndicator(DisplayDriver& display, uint16_t batteryMilliVolts) {
+  // draws the battery and the uptime below it; returns the uptime's left x
+  int renderBatteryIndicator(DisplayDriver& display, uint16_t batteryMilliVolts) {
     // Convert millivolts to percentage
 #ifndef BATT_MIN_MILLIVOLTS
   #define BATT_MIN_MILLIVOLTS 3000
@@ -174,6 +177,28 @@ class HomeScreen : public UIScreen {
       display.drawXbm(iconX - (charging ? 18 : 9), iconY + 1, muted_icon, 8, 8);
     }
 #endif
+    uint64_t uptimeMinutes = ui_uptime.milliseconds() / 60000ULL;
+
+    unsigned long days = uptimeMinutes / 1440;
+    unsigned long hours = (uptimeMinutes % 1440) / 60;
+    unsigned long minutes = uptimeMinutes % 60;
+    char uptime[16];
+    if (days > 0) {
+      snprintf(uptime, sizeof(uptime), "%lud %luh", days, hours);
+    } else if (hours > 0) {
+      snprintf(uptime, sizeof(uptime), "%luh %lum", hours, minutes);
+    } else {
+      snprintf(uptime, sizeof(uptime), "%lum", minutes);
+    }
+
+    display.setColor(UIColor::title_txt);
+    display.setTextSize(1);
+    int uptimeWidth = display.getTextWidth(uptime);
+    int uptimeX = display.width() - uptimeWidth - 2;
+    int uptimeY = iconY + iconHeight + 1;
+    display.setCursor(uptimeX, uptimeY);
+    display.print(uptime);
+    return uptimeX;
   }
 
   CayenneLPP sensors_lpp;
@@ -261,7 +286,7 @@ public:
     display.print(filtered_name);
 
     // battery voltage
-    renderBatteryIndicator(display, _task->getBattMilliVolts());
+    int uptimeX = renderBatteryIndicator(display, _task->getBattMilliVolts());
 
     // curr page indicator
     if (UIColor::title_bkg == UIColor::window_bkg) {
@@ -270,8 +295,12 @@ public:
       display.setColor(UIColor::title_bkg);
     }
     int y = 14;
-    int x = display.width() / 2 - 5 * (HomePage::Count-1);
-    for (uint8_t i = 0; i < HomePage::Count; i++, x += 10) {
+    int x = 5;  // left-aligned, leaving the right side for the uptime
+    int step = 10;
+    if (HomePage::Count > 1 && x + step * (HomePage::Count - 1) + 4 > uptimeX - 2) {
+      step = (uptimeX - 2 - 4 - x) / (HomePage::Count - 1);  // squeeze the dots rather than overlap the uptime
+    }
+    for (uint8_t i = 0; i < HomePage::Count; i++, x += step) {
       if (i == _page) {
         display.fillRect(x-1, y-1, 4, 4);
       } else {
@@ -921,6 +950,7 @@ bool UITask::isButtonPressed() const {
 }
 
 void UITask::loop() {
+  ui_uptime.tick(millis());
   char c = 0;
 #if UI_HAS_JOYSTICK
   int ev = user_btn.check();

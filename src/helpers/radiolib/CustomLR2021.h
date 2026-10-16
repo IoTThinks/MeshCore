@@ -68,6 +68,11 @@ class CustomLR2021 : public LR2021 {
     
     float getFreqMHz() const { return freqMHz; }
 
+    int16_t setRxBoostedGainMode(uint8_t level) {
+      const int16_t status = LR2021::setRxBoostedGainMode(level);
+      if (status == RADIOLIB_ERR_NONE) _rx_boosted = level != 0;
+      return status;
+    }
     bool getRxBoostedGainMode() const { return _rx_boosted; }
 
     int16_t startReceive() override {

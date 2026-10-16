@@ -128,7 +128,7 @@ uint8_t MyMesh::handleLoginReq(const mesh::Identity& sender, const uint8_t* secr
     }
   }
 
-  if (is_flood) {
+  if (is_flood && client->out_path_len != OUT_PATH_FORCE_FLOOD) {
     client->out_path_len = OUT_PATH_UNKNOWN;  // need to rediscover out_path
   }
 
@@ -595,9 +595,10 @@ void MyMesh::onAnonDataRecv(mesh::Packet *packet, const uint8_t *secret, const m
 
     // a DIRECT login can reply via the stored out_path, as onPeerDataRecv() does for REQ
     ClientInfo* client = acl.getClient(sender.pub_key, PUB_KEY_SIZE);
-    bool have_out_path = client != NULL && client->out_path_len != OUT_PATH_UNKNOWN;
+    bool have_out_path = client != NULL && mesh::Packet::isValidPathLen(client->out_path_len);
 
-    auto route = mesh::chooseReplyRoute(packet->isRouteFlood(), reply_path_len != 0xFF, have_out_path);
+    const bool force_flood = client && client->out_path_len == OUT_PATH_FORCE_FLOOD;
+    auto route = mesh::chooseReplyRoute(packet->isRouteFlood(), !force_flood && reply_path_len != 0xFF, have_out_path);
 
     if (route == mesh::REPLY_ROUTE_PATH_RETURN) {
       // let this sender know path TO here, so they can use sendDirect(), and ALSO encode the response
@@ -689,7 +690,7 @@ void MyMesh::onPeerDataRecv(mesh::Packet *packet, uint8_t type, int sender_idx, 
         mesh::Packet *reply =
             createDatagram(PAYLOAD_TYPE_RESPONSE, client->id, secret, reply_data, reply_len);
         if (reply) {
-          if (client->out_path_len != OUT_PATH_UNKNOWN) { // we have an out_path, so send DIRECT
+          if (mesh::Packet::isValidPathLen(client->out_path_len)) { // we have an out_path, so send DIRECT
             sendDirect(reply, client->out_path, client->out_path_len, SERVER_RESPONSE_DELAY);
           } else {
             sendFloodReply(reply, SERVER_RESPONSE_DELAY, packet->getPathHashSize());
@@ -722,7 +723,7 @@ void MyMesh::onPeerDataRecv(mesh::Packet *packet, uint8_t type, int sender_idx, 
 
         mesh::Packet *ack = createAck(ack_hash);
         if (ack) {
-          if (client->out_path_len == OUT_PATH_UNKNOWN) {
+          if (!mesh::Packet::isValidPathLen(client->out_path_len)) {
             sendFloodReply(ack, TXT_ACK_DELAY, packet->getPathHashSize());
           } else {
             sendDirect(ack, client->out_path, client->out_path_len, TXT_ACK_DELAY);
@@ -736,7 +737,7 @@ void MyMesh::onPeerDataRecv(mesh::Packet *packet, uint8_t type, int sender_idx, 
       if (is_retry) {
         *reply = 0;
       } else {
-        handleCommand(sender_timestamp, command, reply);
+        handleCommand(sender_timestamp, command, reply, client);
       }
       int text_len = strlen(reply);
       if (text_len > 0) {
@@ -750,7 +751,7 @@ void MyMesh::onPeerDataRecv(mesh::Packet *packet, uint8_t type, int sender_idx, 
 
         auto reply = createDatagram(PAYLOAD_TYPE_TXT_MSG, client->id, secret, temp, 5 + text_len);
         if (reply) {
-          if (client->out_path_len == OUT_PATH_UNKNOWN) {
+          if (!mesh::Packet::isValidPathLen(client->out_path_len)) {
             sendFloodReply(reply, CLI_REPLY_DELAY_MILLIS, packet->getPathHashSize());
           } else {
             sendDirect(reply, client->out_path, client->out_path_len, CLI_REPLY_DELAY_MILLIS);
@@ -773,7 +774,7 @@ bool MyMesh::onPeerPathRecv(mesh::Packet *packet, int sender_idx, const uint8_t 
     auto client = acl.getClientByIdx(i);
 
     // store a copy of path, for sendDirect()
-    client->out_path_len = mesh::Packet::copyPath(client->out_path, path, path_len);
+    learnOutPath(client->out_path, client->out_path_len, path, path_len);
     client->last_activity = getRTCClock()->getCurrentTime();
   } else {
     MESH_DEBUG_PRINTLN("onPeerPathRecv: invalid peer idx: %d", i);
@@ -933,7 +934,7 @@ MyMesh::MyMesh(mesh::MainBoard &board, mesh::Radio &radio, mesh::MillisecondCloc
   _prefs.rx_boosted_gain = 1; // enabled by default;
 #endif
 #endif
-  _prefs.radio_fem_rxgain = 1;
+  _prefs.radio_fem_rxgain = RADIO_FEM_RXGAIN; // external RX LNA off unless the build or a saved value says otherwise
   _prefs.radio_fem_txgain = 0;
 
   pending_discover_tag = 0;
@@ -978,6 +979,7 @@ void MyMesh::begin(FILESYSTEM *fs) {
 #endif
 
   radio_driver.setParams(_prefs.freq, _prefs.bw, _prefs.sf, _prefs.cr);
+  _prefs.getRadioPrefs()->applyRxPowerSaving(_prefs.sf, _prefs.bw);
   radio_driver.setTxPower(_prefs.tx_power_dbm);
 
   radio_driver.setRxBoostedGainMode(_prefs.rx_boosted_gain);
@@ -1195,7 +1197,7 @@ void MyMesh::clearStats() {
   ((SimpleMeshTables *)getTables())->resetStats();
 }
 
-void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply) {
+void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply, ClientInfo* sender) {
   if (region_load_active) {
     if (StrHelper::isBlank(command)) {  // empty/blank line, signal to terminate 'load' operation
       region_map = temp_map;  // copy over the temp instance as new current map
@@ -1272,6 +1274,34 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
       Serial.printf("\n");
     }
     reply[0] = 0;
+  } else if (strcmp(command, "get outpath") == 0
+          || strcmp(command, "set outpath") == 0
+          || strncmp(command, "set outpath ", 12) == 0) {
+    bool is_get = strncmp(command, "get ", 4) == 0;
+    if (sender == NULL) {
+      strcpy(reply, "Err - command needs remote client context");
+    } else if (is_get) {
+      formatPathReply(sender->out_path, sender->out_path_len, reply, 160);
+    } else {
+      char* spec = command + 11;  // length of "set outpath"
+      if (*spec == ' ') spec++;
+
+      uint8_t path[MAX_PATH_SIZE];
+      uint8_t path_len = OUT_PATH_UNKNOWN;
+      const char* err = NULL;
+      if (!parsePathCommand(spec, path, path_len, err)) {
+        strcpy(reply, err ? err : "Err - invalid path");
+      } else {
+        if (path_len == OUT_PATH_UNKNOWN || path_len == OUT_PATH_FORCE_FLOOD) {
+          memset(sender->out_path, 0, sizeof(sender->out_path));
+          sender->out_path_len = path_len;
+        } else {
+          sender->out_path_len = mesh::Packet::copyPath(sender->out_path, path, path_len);
+        }
+        dirty_contacts_expiry = futureMillis(LAZY_CONTACTS_WRITE_DELAY);
+        formatPathReply(sender->out_path, sender->out_path_len, reply, 160);
+      }
+    }
   } else if (memcmp(command, "discover.neighbors", 18) == 0) {
     const char* sub = command + 18;
     while (*sub == ' ') sub++;
@@ -1310,12 +1340,14 @@ void MyMesh::loop() {
   if (set_radio_at && millisHasNowPassed(set_radio_at)) { // apply pending (temporary) radio params
     set_radio_at = 0;                                     // clear timer
     radio_driver.setParams(pending_freq, pending_bw, pending_sf, pending_cr);
+    _prefs.getRadioPrefs()->applyRxPowerSaving(pending_sf, pending_bw);
     MESH_DEBUG_PRINTLN("Temp radio params");
   }
 
   if (revert_radio_at && millisHasNowPassed(revert_radio_at)) { // revert radio params to orig
     revert_radio_at = 0;                                        // clear timer
     radio_driver.setParams(_prefs.freq, _prefs.bw, _prefs.sf, _prefs.cr);
+    _prefs.getRadioPrefs()->applyRxPowerSaving(_prefs.sf, _prefs.bw);
     MESH_DEBUG_PRINTLN("Radio params restored");
   }
 
@@ -1336,5 +1368,6 @@ bool MyMesh::hasPendingWork() const {
 #if defined(WITH_BRIDGE)
   if (bridge.isRunning()) return true;  // bridge needs WiFi radio, can't sleep
 #endif
-  return _mgr->getOutboundTotal() > 0;
+  return _mgr->getOutboundTotal() > 0 || _mgr->getInboundTotal() > 0 ||  // rxdelay packets wait in the inbound queue
+         isTransmitting() || _prefs.getRadioPrefs()->isRxPowerSavingCalibrationActive();
 }

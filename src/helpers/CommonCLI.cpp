@@ -1,3 +1,4 @@
+#include "PeriodicReboot.h"
 #include <Arduino.h>
 #include "CommonCLI.h"
 #include "TxtDataHelpers.h"
@@ -90,7 +91,8 @@ void CommonCLI::loadPrefsInt(FILESYSTEM* fs, const char* filename) {  // Legacy 
     file.read((uint8_t *)&_prefs->bridge_channel, sizeof(_prefs->bridge_channel));                 // 135
     file.read((uint8_t *)&_prefs->bridge_secret, sizeof(_prefs->bridge_secret));                   // 136
     file.read((uint8_t *)&_prefs->powersaving_enabled, sizeof(_prefs->powersaving_enabled));       // 152
-    file.read(pad, 3);                                                                             // 153
+    file.read((uint8_t *)&_prefs->reboot_interval, sizeof(_prefs->reboot_interval));               // 153
+    file.read(pad, 2);                                                                             // 154
     file.read((uint8_t *)&_prefs->gps_enabled, sizeof(_prefs->gps_enabled));                       // 156
     file.read((uint8_t *)&_prefs->gps_interval, sizeof(_prefs->gps_interval));                     // 157
     file.read((uint8_t *)&_prefs->advert_loc_policy, sizeof (_prefs->advert_loc_policy));          // 161
@@ -423,7 +425,8 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, char* command, char* re
         bool enabled = l->isEnabled(); // is EN pin on ?
         bool fix = l->isValid();       // has fix ?
         int sats = l->satellitesCount();
-        bool active = !strcmp(_sensors->getSettingByKey("gps"), "1");
+        const char* gps_setting = _sensors->getSettingByKey("gps");  // NULL when the sensor manager has no "gps" setting
+        bool active = gps_setting != NULL && strcmp(gps_setting, "1") == 0;
         if (enabled) {
           sprintf(reply, "on, %s, %s, %d sats",
             active?"active":"deactivated",
@@ -460,6 +463,35 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, char* command, char* re
       } else {
         strcpy(reply, "off");
       }
+    } else if (strcmp(command, "sensor") == 0) {
+#if defined(ENV_PIN_SDA) && defined(ENV_PIN_SCL)
+      snprintf(reply, 160, "I2C Wire1: SDA=%d, SCL=%d", (int)ENV_PIN_SDA, (int)ENV_PIN_SCL);
+#elif defined(PIN_BOARD_SDA) && defined(PIN_BOARD_SCL)
+      snprintf(reply, 160, "I2C Wire: SDA=%d, SCL=%d", (int)PIN_BOARD_SDA, (int)PIN_BOARD_SCL);
+#elif defined(PIN_WIRE_SDA) && defined(PIN_WIRE_SCL)
+      snprintf(reply, 160, "I2C Wire: SDA=%d, SCL=%d", (int)PIN_WIRE_SDA, (int)PIN_WIRE_SCL);
+#else
+      snprintf(reply, 160, "I2C GPIOs not defined");
+#endif
+      size_t used = strlen(reply);
+#if defined(PIN_GPS_RX) && defined(PIN_GPS_TX)
+      snprintf(reply + used, 160 - used, "; GPS RX=%d, TX=%d, %s", (int)PIN_GPS_RX, (int)PIN_GPS_TX,
+#if defined(ENV_INCLUDE_GPS) && ENV_INCLUDE_GPS > 0
+               "configured");
+#else
+               "not configured");
+#endif
+#else
+      snprintf(reply + used, 160 - used, "; GPS serial not defined");
+#endif
+    } else if (strcmp(command, "powerlog") == 0) {
+      snprintf(reply, 160, "Last reset reason: %s", _board->getResetReasonString(_board->getResetReason()));
+      if (_board->isPwrMgtInitialised()) {
+        size_t used = strlen(reply);
+        snprintf(reply + used, 160 - used, "; shutdown: %s; boot: %u mV",
+                 _board->getShutdownReasonString(_board->getShutdownReason()),
+                 (unsigned)_board->getBootVoltage());
+      }
     } else if (memcmp(command, "log start", 9) == 0) {
       _callbacks->setLoggingOn(true);
       strcpy(reply, "   logging on");
@@ -486,7 +518,16 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, char* command, char* re
 void CommonCLI::handleSetCmd(uint32_t sender_timestamp, char* command, char* reply) {
   const char* config = &command[4];
 
-  if (memcmp(config, "allow.read.only ", 16) == 0) {
+  if (strncmp(config, "reboot.interval ", 16) == 0) {
+    uint8_t hours;
+    if (!PeriodicReboot::parseHours(config + 16, hours)) {
+      strcpy(reply, "Error: interval range is 0-255 hours");
+    } else {
+      _prefs->reboot_interval = hours;
+      savePrefs();
+      sprintf(reply, "OK - reboot.interval %u h", (unsigned)hours);
+    }
+  } else if (memcmp(config, "allow.read.only ", 16) == 0) {
     _prefs->allow_read_only = memcmp(&config[16], "on", 2) == 0;
     savePrefs();
     strcpy(reply, "OK");
@@ -700,7 +741,9 @@ void CommonCLI::handleSetCmd(uint32_t sender_timestamp, char* command, char* rep
 
 void CommonCLI::handleGetCmd(uint32_t sender_timestamp, char* command, char* reply) {
   const char* config = &command[4];
-  if (memcmp(config, "allow.read.only", 15) == 0) {
+  if (strcmp(config, "reboot.interval") == 0) {
+    sprintf(reply, "> %u", (unsigned)_prefs->reboot_interval);
+  } else if (memcmp(config, "allow.read.only", 15) == 0) {
     sprintf(reply, "> %s", _prefs->allow_read_only ? "on" : "off");
   } else if (memcmp(config, "flood.advert.interval", 21) == 0) {
     sprintf(reply, "> %d", ((uint32_t) _prefs->flood_advert_interval));
