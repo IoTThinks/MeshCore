@@ -6,8 +6,11 @@ on:
       env:
         description: PlatformIO env to build (e.g. Heltec_v3_repeater)
         required: true
+      ref:
+        description: Branch or tag of IoTThinks/MeshCore to build
+        required: true
       version:
-        description: Firmware version string (optional, defaults to the branch name)
+        description: Firmware version string (optional, defaults to the ref name)
         required: false
 
 jobs:
@@ -18,11 +21,15 @@ jobs:
         env:
           ENV_NAME: ${{ inputs.env }}
           VERSION: ${{ inputs.version }}
+          REF: ${{ inputs.ref }}
         run: |
+          [[ "$REF" =~ ^[A-Za-z0-9_./-]+$ ]] || { echo "Bad ref"; exit 1; }
           [[ "$ENV_NAME" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "Bad env name"; exit 1; }
           [[ -z "$VERSION" || "$VERSION" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "Bad version"; exit 1; }
 
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - uses: actions/setup-python@v5
         with:
@@ -31,14 +38,14 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.platformio
-          key: pio-${{ github.ref_name }}-${{ inputs.env }}
+          key: pio-${{ inputs.ref }}-${{ inputs.env }}
 
       - run: pip install platformio
 
       - name: Build
         env:
           ENV_NAME: ${{ inputs.env }}
-          FIRMWARE_VERSION: ${{ inputs.version != '' && inputs.version || github.ref_name }}
+          FIRMWARE_VERSION: ${{ inputs.version != '' && inputs.version || inputs.ref }}
         run: bash build.sh build-firmware "$ENV_NAME"
 
       - uses: actions/upload-artifact@v4
