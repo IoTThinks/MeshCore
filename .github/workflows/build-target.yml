@@ -1,4 +1,5 @@
 name: Build MeshCore target
+run-name: Build ${{ inputs.env }} @ ${{ inputs.ref }}
 
 on:
   workflow_dispatch:
