@@ -52,8 +52,9 @@ jobs:
           # e.g. PowerSaving18.1030 for a last commit on 30 Oct 2026 (UTC)
           DATE=$(TZ=UTC git log -1 --date=format-local:%m%d --format=%cd)
           V="${VERSION:-$REF}"
-          # Remove any hyphens, 'v' prefixes, or slashes to get PowerSaving18
-          CLEAN_V="${V//[-v\/]/}"
+          # Remove slashes, and strip a hyphen followed by 'v' (e.g. -v18 -> 18)
+          CLEAN_V="${V//\//}"
+          CLEAN_V="${CLEAN_V/-v/}"
           echo "version=${CLEAN_V}.${DATE}" >> "$GITHUB_OUTPUT"
 
       - name: Build
