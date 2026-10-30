@@ -43,10 +43,21 @@ jobs:
 
       - run: pip install platformio
 
+      - name: Version from last commit date
+        id: ver
+        env:
+          REF: ${{ inputs.ref }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          # e.g. PowerSaving-v18.261030 for a last commit on 30 Oct 2026 (UTC)
+          DATE=$(TZ=UTC git log -1 --date=format-local:%y%m%d --format=%cd)
+          V="${VERSION:-$REF}"
+          echo "version=${V//\//_}.${DATE}" >> "$GITHUB_OUTPUT"
+
       - name: Build
         env:
           ENV_NAME: ${{ inputs.env }}
-          FIRMWARE_VERSION: ${{ inputs.version != '' && inputs.version || inputs.ref }}
+          FIRMWARE_VERSION: ${{ steps.ver.outputs.version }}
         run: bash build.sh build-firmware "$ENV_NAME"
 
       - uses: actions/upload-artifact@v4
