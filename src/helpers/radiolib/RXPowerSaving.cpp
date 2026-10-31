@@ -6,7 +6,7 @@ static uint32_t ceilRxPowerSavingValue(float value) {
   return value > (float)rounded ? rounded + 1 : rounded;
 }
 
-// Both radios program their duty cycle in 15.625 us ticks and truncate the
+// The calculator uses the SX1262's 15.625 us ticks and truncates the
 // microsecond value on the way in, so a period of 10013 us is really 10000 us
 // on air while the CLI happily reports 10013. Snapping to the nearest tick and
 // returning the smallest microsecond value that still lands on it makes the
@@ -56,27 +56,6 @@ uint32_t rxPowerSavingTransition(const RxPowerSavingControl* control) {
                             : RX_POWERSAVING_TRANSITION_US;
 }
 
-// rxPeriod register values measured to break SetRxDutyCycle on SX1262: the
-// radio latches the preamble and then never validates a header, losing 35% of
-// packets at SF6 and all of them at SF7. Both were reproduced on two boards
-// with an LR1110 witnessing 100% of the same transmissions, and both bands are
-// exactly one tick wide - 639 and 641 are lossless.
-//
-// This list is certainly incomplete: about thirty values were sampled out of
-// the thousands a profile can generate. Levels 1-10 do not need it because the
-// timer guard makes any value safe; it exists only for the unguarded maximum,
-// where it is the one protection left.
-static const uint32_t RX_POWERSAVING_BAD_RX_TICKS[] = {320, 640};
-
-static uint32_t avoidBadRxPowerSavingTick(uint32_t rx_us) {
-  const uint32_t tick = (rx_us * 8) / 125;
-  for (uint32_t bad : RX_POWERSAVING_BAD_RX_TICKS) {
-    // One tick longer costs 15.625 us of listening and steps clear of the band.
-    if (tick == bad) return (uint32_t)((((uint64_t)tick + 1) * 125 + 7) / 8);
-  }
-  return rx_us;
-}
-
 bool calcRxPowerSavingLevel(uint8_t level, uint8_t sf, float bw, uint8_t preamble,
                             uint32_t* rx_us, uint32_t* sleep_us,
                             float capture_cost_symbols, uint32_t transition_us) {
@@ -116,8 +95,7 @@ bool calcRxPowerSavingLevel(uint8_t level, uint8_t sf, float bw, uint8_t preambl
   } else {
     // Guarded levels state their catch directly, so the sleep is just what is
     // left of the preamble - no capture cost involved. The pad makes the node
-    // catch a fifth of a symbol more than promised, which is what keeps the
-    // generated register pairs off the defective ones.
+    // catch a fifth of a symbol more than promised.
     const float catch_symbols = rxPowerSavingLevelCatch(level, preamble);
     // A level that undertakes to catch less than this radio needs to latch is
     // not usable: say so rather than return a geometry that cannot work.
@@ -147,19 +125,9 @@ bool calcRxPowerSavingLevel(uint8_t level, uint8_t sf, float bw, uint8_t preambl
   }
   *sleep_us = transition_us + snapRxPowerSavingToTick(*sleep_us - transition_us);
 
-  // SetRxDutyCycle timer guard, straight out of the SX1261/2 datasheet: on
-  // preamble detection the radio restarts its timer with 2*rxPeriod +
-  // sleepPeriod (register values), and the packet dies if the header does not
-  // arrive inside it. The datasheet states the requirement as
-  //     Tpreamble + Theader <= 2 * rxPeriod + sleepPeriod
-  // Measured: when it holds, no period value causes trouble. When it is broken
-  // the SX1262 usually gets away with it - but not always, and the exceptions
-  // are a single register tick wide. rxPeriod 640 (exactly 10.000 ms) loses
-  // 60-65% of packets at SF6 and everything at SF7, on two different boards,
-  // while 639 and 641 are lossless; rxPeriod 320 behaves the same way. Nothing
-  // in the register value predicts which ticks misbehave, so satisfy the
-  // condition instead of dodging the values. The listen window is therefore not
-  // a free parameter on the guarded scale - it is whatever the condition needs.
+  // Nominal timer guard: preamble + header <= 2*RX + sleep (register periods).
+  // SX1262 applies its measured timer workaround separately when arming RXPS,
+  // including manual periods and P32 senders received with the P16 profile.
   const float sync_symbols =
       sf <= 6 ? RX_POWERSAVING_SYNC_SYMBOLS_LOW_SF : RX_POWERSAVING_SYNC_SYMBOLS;
   const float need_us =
@@ -180,7 +148,6 @@ bool calcRxPowerSavingLevel(uint8_t level, uint8_t sf, float bw, uint8_t preambl
   }
 
   *rx_us = snapRxPowerSavingUpToTick(*rx_us);
-  if (unguarded) *rx_us = avoidBadRxPowerSavingTick(*rx_us);
   return true;
 }
 

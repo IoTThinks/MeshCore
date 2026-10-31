@@ -45,11 +45,8 @@ static constexpr float RX_POWERSAVING_MIN_CATCH_SYMBOLS = 8.0f;
 
 // On top of the ladder, every guarded level sleeps this much less than the
 // arithmetic demands - so it catches 0.2 symbols more than its level promises.
-// The reason is not capture safety: it is that specific register pairs the
-// calculation lands on are defective (preamble latched, header never
-// validated) in the same way isolated rxPeriod ticks 320 and 640 are. Nudging
-// every generated geometry off those points cost 0.05 mA and took the worst
-// measured cell from 3.33% packet loss to 0.11% across the whole ladder.
+// This preserves the measured capture margin; the SX1262 post-preamble timer
+// workaround is separate and cannot recover preambles missed during sleep.
 // Levels 9 and 10 are exempt - their geometries are pinned to bench
 // measurements and shifting them would invalidate that data.
 static constexpr float RX_POWERSAVING_MARGIN_PAD_SYMBOLS = 0.2f;
@@ -110,21 +107,15 @@ static constexpr uint32_t RX_POWERSAVING_TRANSITION_US = MC_TCXO_DELAY_US + 1000
 
 // Slack the timer guard leaves on top of the datasheet condition, in symbols.
 //
-// Closing the condition exactly is not enough. The calculator lands on register
-// pairs that satisfy it by a hair and still lose packets: rx=2476/sleep=2455
-// ticks clears it by 22 us at 0.12 symbol and drops 2-6% on every SX1262 tried,
-// while moving any one component clears the fault. It is the same family as the
-// isolated bad ticks 320 and 640 - the condition does not predict which pairs
-// misbehave, so the answer is to stop generating geometries that sit on its
-// edge. One whole symbol of slack is what the bench evidence supports.
+// Keep one symbol beyond the nominal preamble/header duration. SX1262 also
+// includes this slack when choosing its effective timer period.
 #ifndef MC_RXPS_TIMER_SLACK_SYMBOLS
   #define MC_RXPS_TIMER_SLACK_SYMBOLS 1.0f
 #endif
 static constexpr float RX_POWERSAVING_TIMER_SLACK_SYMBOLS = MC_RXPS_TIMER_SLACK_SYMBOLS;
 
-// Both radio families program their duty cycle in these units, and truncate the
-// microsecond value on the way in. Everything the timer guard compares has to
-// be expressed in whole ticks or it comes out short by a fraction of one.
+// Calculator grid and SX1262 timer unit. LR1110 converts the resulting periods
+// separately to its native 1/32768 s ticks.
 static constexpr float RX_POWERSAVING_TICK_US = 15.625f;
 
 // Margin above the transition before a duty cycle actually works; see below.

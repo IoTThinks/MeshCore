@@ -1218,7 +1218,7 @@ Ethernet support is available on RAK4631 boards with a RAK13800 (W5100S) Etherne
 
 Repeater, Room Server, Sensor and Companion. SX1262 and LR1110 receive in a duty cycle; LR1121, LR2021 and SX127x stay in continuous RX (`supported=no`).
 
-- `get radio.rxps`: `desired` (saved on/off), `effective` (`armed` or `continuous`), `supported`, `err` (last error), `fail` (arm failures), `level`, `catch` (preamble symbols still caught), `preamble`, `rx`/`sleep` (µs). `erx`/`eslp` appear when the driver had to clamp the periods.
+- `get radio.rxps`: `desired` (saved on/off), `effective` (`armed` or `continuous`), `supported`, `err` (last error), `fail` (arm failures), `level`, `catch` (preamble symbols still caught), `preamble`, `rx`/`sleep` (µs). `erx`/`eslp` appear when the driver changed the periods: LR1110 extends `rx` to meet its timer, and SX1262 adjusts `rx` for its measured post-preamble timer, so they are usually present there.
 - `set radio.rxps off|on|conservative|balanced|max|overdrive|riskyWorkingMax`: `on` = `conservative` = level 3; `balanced` = level 6; `max` = level 8; `overdrive` (9) and `riskyWorkingMax` (10) run outside the datasheet timing rule.
 - `set radio.rxps level <1-10> [preamble <16|32>]`, `set radio.rxps max|overdrive|riskyWorkingMax preamble <16|32>`
 - `set radio.rxps <rx_us> <sleep_us>`: manual periods, 1000–30000000 µs, kept across SF/BW changes.

@@ -2,6 +2,7 @@
 
 #include "CustomSX1262.h"
 #include "RadioLibWrappers.h"
+#include "SX1262RxPowerSaving.h"
 #include "SX126xReset.h"
 
 #ifndef USE_SX1262
@@ -70,12 +71,16 @@ protected:
   // PowerSaving variant
   int16_t armDutyCycle(RadioLibIrqFlags_t irq_flags, RadioLibIrqFlags_t irq_mask,
                        uint32_t* eff_rx_us, uint32_t* eff_sleep_us) override {
-    // RadioLib programs the SX126x with exactly what we ask for (it only
-    // subtracts the wake-up transition from the sleep period internally).
-    *eff_rx_us = _rx_ps_rx_us;
+    auto* radio = static_cast<CustomSX1262*>(_radio);
+    const uint32_t transition_us = rxPowerSavingTransitionUs();
+    // Less than one 15.625 us tick of programmed sleep.
+    if (_rx_ps_sleep_us < transition_us + 16) return RADIOLIB_ERR_INVALID_SLEEP_PERIOD;
+    if (!adjustSX1262RxPowerSavingPeriod(_rx_ps_rx_us, _rx_ps_sleep_us,
+          radio->spreadingFactor, radio->bandwidthKhz, transition_us, eff_rx_us)) {
+      return RADIOLIB_ERR_INVALID_RX_PERIOD;
+    }
     *eff_sleep_us = _rx_ps_sleep_us;
-    return ((CustomSX1262 *)_radio)->startReceiveDutyCycle(
-        _rx_ps_rx_us, _rx_ps_sleep_us, irq_flags, irq_mask);
+    return radio->startReceiveDutyCycle(*eff_rx_us, *eff_sleep_us, irq_flags, irq_mask);
   }
 
   // PowerSaving variant
