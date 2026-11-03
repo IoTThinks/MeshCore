@@ -521,12 +521,8 @@ TEST(RxPowerSavingCLI, ReportsWhenNoLevelCanDutyCycleAtThisRadioSetting) {
 // SX1261/2 datasheet, SetRxDutyCycle: on preamble detection the radio restarts
 // its timer with 2*rxPeriod + sleepPeriod and requires
 //     Tpreamble + Theader <= 2 * rxPeriod + sleepPeriod
-// Measured on two SX1262 boards: when that holds nothing goes wrong, and when
-// it is broken the chip usually gets away with it - except at isolated register
-// values one tick wide (rxPeriod 320 and 640) where it loses 35-100% of the
-// packets it has already latched. Satisfying the condition is the only defence
-// that does not depend on knowing every bad tick.
-TEST(RxPowerSaving, EveryLevelSatisfiesTheDutyCycleTimerCondition) {
+// The SX1262 wrapper separately adjusts R for the measured timer quirk.
+TEST(RxPowerSaving, GuardedLevelsSatisfyTheNominalDutyCycleTimerCondition) {
   const uint8_t sfs[] = {6, 7, 8, 10, 12};
   const float bws[] = {62.5f, 250.0f};
   const uint8_t preambles[] = {16, 32};
@@ -611,22 +607,20 @@ TEST(RxPowerSaving, OverdriveDeliberatelyBreaksTheTimerCondition) {
   EXPECT_LT(rx_us, g_rx);            // and it really does listen less
 }
 
-TEST(RxPowerSaving, OverdriveStepsOffTheKnownBadRegisterTicks) {
+TEST(RxPowerSaving, CalculatorLeavesChipSpecificTickAdjustmentsToTheWrapper) {
   // 8 symbols land on rxPeriod tick 320 when the symbol is 625 us. No standard
-  // bandwidth produces that, which is why production never hit it - but the
-  // unguarded path has no other protection, so the check has to work.
+  // bandwidth produces that. The shared calculator must not apply SX1262's
+  // timer workaround to other radios.
   uint32_t rx_us = 0;
   uint32_t sleep_us = 0;
   ASSERT_TRUE(calcRxPowerSavingLevel(RX_POWERSAVING_OVERDRIVE_LEVEL, 6, 102.4f, 32,
                                      &rx_us, &sleep_us));
-  EXPECT_EQ((rx_us * 8) / 125, 321u);   // nudged one tick clear of 320
-  EXPECT_EQ(rx_us, 5016u);
+  EXPECT_EQ((rx_us * 8) / 125, 320u);
+  EXPECT_EQ(rx_us, 5000u);
 
-  // The guarded scale needs no such help and must be left alone.
-  uint32_t g_rx = 0;
-  uint32_t g_sleep = 0;
-  ASSERT_TRUE(calcRxPowerSavingLevel(10, 6, 102.4f, 32, &g_rx, &g_sleep));
-  EXPECT_NE((g_rx * 8) / 125, 320u);
+  ASSERT_TRUE(calcRxPowerSavingLevel(RX_POWERSAVING_OVERDRIVE_LEVEL, 6, 51.2f, 32,
+                                     &rx_us, &sleep_us));
+  EXPECT_EQ((rx_us * 8) / 125, 640u);
 }
 
 TEST(RxPowerSavingCLI, OverdriveAndMaxPresetsSelectTheRightLevels) {
@@ -770,8 +764,7 @@ TEST(RxPowerSaving, EveryGuardedLevelDeliversTheMarginItPromises) {
           }
           const float symbol_us = (1000.0f * (float)(1UL << sf)) / bw;
           const float caught = (float)preamble - (float)sleep_us / symbol_us;
-          // The delivered catch is the ladder value plus the pad that keeps
-          // every generated geometry off the defective register pairs.
+          // The delivered catch is the ladder value plus the capture margin pad.
           EXPECT_NEAR(caught,
                       rxPowerSavingLevelCatch(level, preamble) + RX_POWERSAVING_MARGIN_PAD_SYMBOLS,
                       0.05f)

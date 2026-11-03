@@ -256,8 +256,8 @@ void RXPowerSavingCLI::get(const RxPowerSavingConfig* config,
            (unsigned long)config->preamble, (unsigned long)config->rx_us,
            (unsigned long)config->sleep_us);
 
-  // Only report the periods the hardware really runs with when a driver had to
-  // clamp them - printing them always would not fit the 160 byte reply buffer.
+  // Only report the periods the hardware really runs with when a driver changed
+  // them - printing them always would not fit the 160 byte reply buffer.
   if (len > 0 && (size_t)len < reply_size && status.armed &&
       (status.effective_rx_us != config->rx_us ||
        status.effective_sleep_us != config->sleep_us)) {
