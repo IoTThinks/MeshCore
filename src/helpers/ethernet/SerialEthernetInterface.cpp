@@ -40,6 +40,11 @@ size_t SerialEthernetInterface::writeFrame(const uint8_t src[], size_t len) {
   return 0;
 }
 
+// PowerSaving variant
+bool SerialEthernetInterface::isReadBusy() const {
+  return false;
+}
+
 bool SerialEthernetInterface::isWriteBusy() const {
   return false;
 }
