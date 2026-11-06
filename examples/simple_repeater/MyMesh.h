@@ -105,6 +105,10 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
 #endif
   CayenneLPP telemetry;
   unsigned long set_radio_at, revert_radio_at;
+  // Battery-controlled forwarding state
+  bool batt_fwd_suspended;
+  uint8_t batt_fwd_count;            // consecutive readings past the active threshold
+  unsigned long next_batt_check;
   float pending_freq;
   float pending_bw;
   uint8_t pending_sf;
@@ -126,6 +130,10 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
 
   File openAppend(const char* fname);
   bool isLooped(const mesh::Packet* packet, const uint8_t max_counters[]);
+  bool isBattFwdEnabled() const { return _prefs.batt_fwd_suspend_mv > 0 && _prefs.batt_fwd_resume_mv > _prefs.batt_fwd_suspend_mv; }
+  bool isForwardDisabled() const { return _prefs.disable_fwd || batt_fwd_suspended; }
+  void checkBattForwarding();
+  void handleBatteryCmd(const char* args, char* reply);
 
 protected:
   float getAirtimeBudgetFactor() const override {
