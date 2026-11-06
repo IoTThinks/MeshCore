@@ -135,6 +135,36 @@ void halt() {
   bool wifi_enabled = false;   // set at boot from prefs; false also when the effective SSID is blank
 #endif
 
+#ifdef ESP32_PLATFORM
+// Light sleep stays out of an active session unless the level says otherwise
+// (whatever breaks the link also breaks the CLI needed to turn it off), and out
+// of anything that has inhibited sleep, such as an active WiFi link.
+static bool lightSleepAllowed() {
+  if (board.isSleepInhibited()) return false;
+
+  switch (the_mesh.getNodePrefs()->light_sleep_level) {
+    case 1:  return !interface_manager.isConnected();
+    case 2:  return true;
+    default: return false;
+  }
+}
+
+// Fewer wake-ups is the dominant saving once light sleep works; nothing needs a
+// short tick - a received packet waits in the radio's FIFO, BLE events come from
+// the BT controller, and app frames are queued by the BT task. A talking app or
+// an enabled WiFi console keeps the responsive cadence.
+static uint32_t idleTickMs(bool light_sleep) {
+  if (!light_sleep) return 10;
+#if defined(BLE_PIN_CODE)
+  if (bluetooth_interface.isLinkActive()) return 10;
+#endif
+#ifdef ENABLE_WIFI_INTERFACE
+  if (wifi_enabled) return 10;
+#endif
+  return the_mesh.getNodePrefs()->sleep_tick_ms;
+}
+#endif
+
 void setup() {
   Serial.begin(115200);
   board.begin();
@@ -209,6 +239,12 @@ void setup() {
 
 // add bluetooth interface
 #if defined(BLE_PIN_CODE)
+#if defined(ESP32_PLATFORM)
+  NodePrefs* prefs = the_mesh.getNodePrefs();
+  bluetooth_interface.setPowerPrefs(prefs->ble_adv_ms, prefs->ble_tx_dbm,
+                                    prefs->ble_conn_ms, prefs->ble_conn_latency,
+                                    prefs->ble_sync_ms, prefs->ble_quiet_s);
+#endif
   bluetooth_interface.begin(BLE_NAME_PREFIX, the_mesh.getNodePrefs()->node_name, the_mesh.getBLEPin());
   interface_manager.addInterface(InterfaceType::Bluetooth, &bluetooth_interface);
 #endif
@@ -290,10 +326,6 @@ void setup() {
 #endif
 
   board.onBootComplete();
-
-#if defined(ESP32_PLATFORM)
-  PowerSaving::applyCompanionPowerSaving(the_mesh.getNodePrefs()->powersaving_enabled);
-#endif
 }
 
 void loop() {
@@ -309,27 +341,38 @@ void loop() {
   external_watchdog.loop();
 #endif
 
-  if (the_mesh.getNodePrefs()->powersaving_enabled && !the_mesh.hasPendingWork()) {
+  bool powersaving = the_mesh.getNodePrefs()->powersaving_enabled;
+#if defined(ESP32_PLATFORM)
+  // Light sleep only happens while every task is blocked, so an idle loop has
+  // to give the idle task a slot - with either power knob on.
+  bool light_sleep = lightSleepAllowed();
+  bool idle_yields = powersaving || light_sleep;
+#else
+  bool idle_yields = powersaving;
+#endif
+  if (idle_yields && !the_mesh.hasPendingWork()) {
 #if defined(NRF52_PLATFORM)
     board.sleep(0); // nrf ignores seconds param, sleeps whenever possible
 #elif defined(ESP32_PLATFORM)
   #if defined(BLE_PIN_CODE)
       if (!bluetooth_interface.isReadBusy() && !bluetooth_interface.isWriteBusy()) { // BLE is not busy
-        vTaskDelay(pdMS_TO_TICKS(10));                                               // attempt to sleep
+        vTaskDelay(pdMS_TO_TICKS(idleTickMs(light_sleep)));                          // attempt to sleep
       }
   #elif defined(ENABLE_USB_INTERFACE)
       if(!usb_serial_interface.isReadBusy() && !usb_serial_interface.isWriteBusy()){
-        vTaskDelay(pdMS_TO_TICKS(10)); // attempt to sleep
+        vTaskDelay(pdMS_TO_TICKS(idleTickMs(light_sleep))); // attempt to sleep
       }
   #endif
 #endif
   }
 
 #if defined(ESP32_PLATFORM)
-  static uint8_t applied_powersaving = the_mesh.getNodePrefs()->powersaving_enabled;
-  if (the_mesh.getNodePrefs()->powersaving_enabled != applied_powersaving) { // changed via CLI
-    applied_powersaving = the_mesh.getNodePrefs()->powersaving_enabled;
-    PowerSaving::applyCompanionPowerSaving(applied_powersaving);
+  // First loop, a prefs knob moving, or the `idle` level seeing a connect/disconnect.
+  static uint8_t applied_power = 0xFF;
+  uint8_t power = (powersaving ? 1 : 0) | (light_sleep ? 2 : 0);
+  if (power != applied_power) {
+    applied_power = power;
+    PowerSaving::applyCompanionPowerSaving(powersaving, light_sleep);
   }
 #endif
 

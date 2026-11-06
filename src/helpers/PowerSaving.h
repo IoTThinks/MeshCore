@@ -13,9 +13,9 @@
 class PowerSaving {
 public:
     #if defined(ESP32_PLATFORM)
-    static void applyCompanionPowerSaving(bool enabled);
-    static void enableCompanionPowerSaving();
-    static void disableCompanionPowerSaving();
+    // Companion profile. `powersaving` keeps its original meaning (BLE modem
+    // sleep + DVFS); `light_sleep` adds automatic light sleep.
+    static void applyCompanionPowerSaving(bool powersaving, bool light_sleep);
     static esp_err_t configurePowerManagement(int max_freq_mhz, int min_freq_mhz, bool light_sleep_enable);
 #endif
 };

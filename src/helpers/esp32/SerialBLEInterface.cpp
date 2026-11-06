@@ -10,6 +10,38 @@
 
 #define ADVERT_RESTART_DELAY  1000   // millis
 
+// BLE intervals are in 1.25 ms / 0.625 ms units; the CLI works in millis.
+#define BLE_INTERVAL_UNIT_MS    1.25f
+#define BLE_ADV_UNIT_MS         0.625f
+
+// Advertised TX power steps are 3 dBm apart on every ESP32 variant; only the
+// base differs (S3/C3 start at -24 dBm, the original ESP32 at -12 dBm).
+#if CONFIG_IDF_TARGET_ESP32
+  #define BLE_TX_MIN_DBM    (-12)
+  #define BLE_TX_LEVELS     8
+#else
+  #define BLE_TX_MIN_DBM    (-24)
+  #define BLE_TX_LEVELS     16
+#endif
+
+static esp_power_level_t bleTxPowerLevel(int8_t dbm) {
+  int level = (dbm - BLE_TX_MIN_DBM) / 3;
+  if (level < 0) level = 0;
+  if (level >= BLE_TX_LEVELS) level = BLE_TX_LEVELS - 1;
+  return (esp_power_level_t) level;
+}
+
+static uint16_t bleIntervalUnits(uint16_t ms, float unit_ms) {
+  uint16_t units = (uint16_t)(ms / unit_ms + 0.5f);
+  return units < 6 ? 6 : units;   // BLE minimum is 7.5 ms
+}
+
+// Frames closer together than this belong to the same burst; a burst of
+// SYNC_BURST_FRAMES promotes the link back to the fast interval. One poll from
+// an idle app never gets there, an app sync (contacts, channels, messages) does.
+#define SYNC_BURST_WINDOW_MS   2000
+#define SYNC_BURST_FRAMES      3
+
 void SerialBLEInterface::begin(const char* prefix, char* name, uint32_t pin_code) {
   _pin_code = pin_code;
 
@@ -25,14 +57,13 @@ void SerialBLEInterface::begin(const char* prefix, char* name, uint32_t pin_code
 
   // Create the BLE Device
   BLEDevice::init(dev_name);
+  BLEDevice::setPower(bleTxPowerLevel(_tx_dbm));
   BLEDevice::setSecurityCallbacks(this);
   BLEDevice::setMTU(MAX_FRAME_SIZE);
 
   BLESecurity  sec;
   sec.setStaticPIN(pin_code);
   sec.setAuthenticationMode(ESP_LE_AUTH_REQ_SC_MITM_BOND);
-
-  //BLEDevice::setPower(ESP_PWR_LVL_N8);
 
   // Create the BLE Server
   pServer = BLEDevice::createServer();
@@ -51,6 +82,72 @@ void SerialBLEInterface::begin(const char* prefix, char* name, uint32_t pin_code
   pRxCharacteristic->setCallbacks(this);
 
   pServer->getAdvertising()->addServiceUUID(SERVICE_UUID);
+  if (_adv_ms) {
+    uint16_t units = bleIntervalUnits(_adv_ms, BLE_ADV_UNIT_MS);
+    pServer->getAdvertising()->setMinInterval(units);
+    pServer->getAdvertising()->setMaxInterval(units);
+  }
+}
+
+// Ask the phone for connection timing: the fast profile while the app is
+// talking, the idle one once it has been quiet for `quiet` seconds. It is a
+// request (the central may decline), sent once the link is encrypted so it
+// cannot be dropped mid-pairing.
+void SerialBLEInterface::applyConnParams() {
+  uint16_t interval_ms = _fast ? _sync_ms : _conn_ms;
+  uint8_t latency = _fast ? 0 : _conn_latency;
+  if (!interval_ms) return;
+
+  // Ask for a min/max window rather than min == max: Apple's accessory rules
+  // require max >= min + 15 ms, and a request that breaks them can be dropped
+  // outright (leaving the phone's own timing in place, i.e. no savings on iOS).
+  uint16_t min_interval = bleIntervalUnits(interval_ms, BLE_INTERVAL_UNIT_MS);
+  uint16_t max_interval = min_interval + (uint16_t)(15.0f / BLE_INTERVAL_UNIT_MS);
+
+  // Spec: supervision timeout > (1 + latency) * interval * 2; Apple adds
+  // < interval * (1 + latency) * 3 and <= 6 s. Size it from the max interval with
+  // 25% margin, floored at 4 s so a slow link still has slack.
+  uint32_t period_ms = (uint32_t) max_interval * 5 / 4;
+  uint32_t timeout = period_ms * 2 * (1 + latency) / 10;   // units of 10 ms
+  timeout += timeout / 4;
+  if (timeout < 400) timeout = 400;
+  if (timeout > 600) timeout = 600;
+
+  pServer->updateConnParams(_peer_bda, min_interval, max_interval, latency, timeout);
+}
+
+// Flip between the two profiles and tell the phone about it.
+void SerialBLEInterface::setFastProfile(bool fast) {
+  _fast = fast;
+  _burst = 0;
+  applyConnParams();
+}
+
+// "The app is talking": only frames *from* the phone count. Pushes towards it
+// (raw-RX log, adverts, queued messages) are driven by mesh traffic, and counting
+// those would keep flipping a busy link back to the fast profile forever.
+void SerialBLEInterface::noteActivity() {
+  _last_activity = millis();
+  if (_fast || !_conn_ms || !_sync_ms) return;   // switching disabled, or already fast
+
+  if (++_burst < SYNC_BURST_FRAMES) return;
+
+  BLE_DEBUG_PRINTLN("SerialBLEInterface -> app burst, fast conn params");
+  setFastProfile(true);
+}
+
+void SerialBLEInterface::pollConnParams() {
+  if (!deviceConnected || !_conn_ms || !_sync_ms) return;
+
+  unsigned long quiet_ms = millis() - _last_activity;
+  if (_fast) {
+    if (quiet_ms <= (unsigned long) _quiet_s * 1000UL) return;
+
+    BLE_DEBUG_PRINTLN("SerialBLEInterface -> idle, slow conn params");
+    setFastProfile(false);
+  } else if (_burst && quiet_ms > SYNC_BURST_WINDOW_MS) {
+    _burst = 0;   // frames too far apart to be a sync burst
+  }
 }
 
 // -------- BLESecurityCallbacks methods
@@ -78,6 +175,10 @@ void SerialBLEInterface::onAuthenticationComplete(esp_ble_auth_cmpl_t cmpl) {
   if (cmpl.success) {
     BLE_DEBUG_PRINTLN(" - SecurityCallback - Authentication Success");
     deviceConnected = true;
+    // Start on the fast profile so the app's first sync is quick; the link
+    // drops to the idle profile once it goes quiet (see pollConnParams).
+    _last_activity = millis();
+    setFastProfile(_conn_ms && _sync_ms);
   } else {
     BLE_DEBUG_PRINTLN(" - SecurityCallback - Authentication Failure*");
 
@@ -95,6 +196,7 @@ void SerialBLEInterface::onConnect(BLEServer* pServer) {
 void SerialBLEInterface::onConnect(BLEServer* pServer, esp_ble_gatts_cb_param_t *param) {
   BLE_DEBUG_PRINTLN("onConnect(), conn_id=%d, mtu=%d", param->connect.conn_id, pServer->getPeerMTU(param->connect.conn_id));
   last_conn_id = param->connect.conn_id;
+  memcpy(_peer_bda, param->connect.remote_bda, sizeof(_peer_bda));
 }
 
 void SerialBLEInterface::onMtuChanged(BLEServer* pServer, esp_ble_gatts_cb_param_t* param) {
@@ -121,6 +223,7 @@ void SerialBLEInterface::onWrite(BLECharacteristic* pCharacteristic, esp_ble_gat
     Frame frame = {};
     frame.len = len;
     memcpy(frame.buf, rxValue, len);
+    noteActivity();
 
     if (xQueueSend(recv_queue, &frame, 0) != pdTRUE) {
       BLE_DEBUG_PRINTLN("ERROR: onWrite(), recv_queue is full!");
@@ -198,6 +301,8 @@ bool SerialBLEInterface::isWriteBusy() const {
 }
 
 size_t SerialBLEInterface::checkRecvFrame(uint8_t dest[]) {
+  pollConnParams();
+
   if (send_queue_len > 0   // first, check send queue
     && millis() >= _last_write + BLE_WRITE_MIN_INTERVAL    // space the writes apart
   ) {

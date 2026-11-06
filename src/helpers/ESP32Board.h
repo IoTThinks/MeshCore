@@ -177,6 +177,8 @@ public:
     inhibit_sleep = inhibit;
   }
 
+  bool isSleepInhibited() const { return inhibit_sleep; }
+
   uint32_t getResetReason() const override {
     return esp_reset_reason();
   }
