@@ -55,6 +55,16 @@ public:
 
   // PowerSaving variant
   uint8_t powersaving_enabled = 0; // boolean
+  uint8_t light_sleep_level = 0;   // ESP32: 0 = off, 1 = idle only, 2 = always
+  uint16_t sleep_tick_ms = 10;     // ESP32: loop poll interval while idle (10 = responsive)
+
+  // BLE power tuning (ESP32 only, see SerialBLEInterface)
+  uint16_t ble_adv_ms = 0;        // advertising interval; 0 = stack default (20-40 ms)
+  int8_t   ble_tx_dbm = 3;        // ESP32 default is +3 dBm
+  uint16_t ble_conn_ms = 0;       // idle connection interval; 0 = leave it to the phone
+  uint8_t  ble_conn_latency = 0;  // connection events the peripheral may skip while idle
+  uint16_t ble_sync_ms = 30;      // connection interval while the app talks; 0 = never switch
+  uint16_t ble_quiet_s = 10;      // silence before dropping back to the idle interval
 
 #ifdef ENABLE_WIFI_INTERFACE
   #ifndef WIFI_SSID
@@ -195,11 +205,29 @@ private:
   protected:
     void structure() override {
       def("pwr_sav_en", _parent->powersaving_enabled);
+      def("lsleep", _parent->light_sleep_level);
+      def("tick", _parent->sleep_tick_ms);
     }
   public:
     PowerPrefs(NodePrefs* parent) : _parent(parent) { }
   };
   PowerPrefs power;
+
+  class BlePrefs : public ConfigSerializer {   // BLE power tuning
+    NodePrefs* _parent;
+  protected:
+    void structure() override {
+      def("adv", _parent->ble_adv_ms);
+      def("tx", _parent->ble_tx_dbm);
+      def("conn", _parent->ble_conn_ms);
+      def("lat", _parent->ble_conn_latency);
+      def("sync", _parent->ble_sync_ms);
+      def("quiet", _parent->ble_quiet_s);
+    }
+  public:
+    BlePrefs(NodePrefs* parent) : _parent(parent) { }
+  };
+  BlePrefs ble;
 
   DynamicConfigSerializer custom;
 
@@ -233,13 +261,15 @@ protected:
     // PowerSaving variant
     def("power", power);
 
+    def("ble", ble);
+
     def("custom", custom);
 #ifdef ENABLE_WIFI_INTERFACE
     def("wifi", wifi);
 #endif
   }
 public:
-  NodePrefs() : radio(this), gps(this), companion(this), power(this), custom(&radio)
+  NodePrefs() : radio(this), gps(this), companion(this), power(this), ble(this), custom(&radio)
 #ifdef ENABLE_WIFI_INTERFACE
     , wifi(this)
 #endif

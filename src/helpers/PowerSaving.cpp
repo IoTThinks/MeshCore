@@ -1,39 +1,30 @@
 #include "helpers/PowerSaving.h"
 
 #if defined(ESP32_PLATFORM)
-// PowerSaving for companions
-void PowerSaving::applyCompanionPowerSaving(bool powersaving_enabled) {
-  if (powersaving_enabled) {
-    enableCompanionPowerSaving();
+void PowerSaving::applyCompanionPowerSaving(bool powersaving, bool light_sleep) {
+#if defined(BLE_PIN_CODE) && !CONFIG_IDF_TARGET_ESP32C6
+  // The BT controller must be sleep-capable before the PM block may stop the CPU
+  // while a connection is open, so light sleep implies modem sleep.
+  if (powersaving || light_sleep) {
+    esp_bt_sleep_enable();
   } else {
-    disableCompanionPowerSaving();
+    esp_bt_sleep_disable();
   }
-}
-
-void PowerSaving::enableCompanionPowerSaving() {
-#if defined(BLE_PIN_CODE) && !CONFIG_IDF_TARGET_ESP32C6
-  // Enable BLE sleep
-  esp_bt_sleep_enable();
 #endif
 
-  // Configure Power Management
-#if defined(BLE_PIN_CODE)
-  configurePowerManagement(80, 10, false);
+  int max_freq_mhz = 80;
+#ifdef ESP32_CPU_FREQ
+  max_freq_mhz = ESP32_CPU_FREQ;
 #endif
-}
+  int min_freq_mhz = powersaving ? 10 : max_freq_mhz;
 
-void PowerSaving::disableCompanionPowerSaving() {
-#if defined(BLE_PIN_CODE) && !CONFIG_IDF_TARGET_ESP32C6
-  // Disable BLE sleep
-  esp_bt_sleep_disable();
-#endif
-
-  // Configure Power Management
-#if defined(ESP32_CPU_FREQ)
-  configurePowerManagement(ESP32_CPU_FREQ, ESP32_CPU_FREQ, false);
-#else
-  configurePowerManagement(80, 80, false);
-#endif
+  esp_err_t err = configurePowerManagement(max_freq_mhz, min_freq_mhz, light_sleep);
+  if (err != ESP_OK && light_sleep) {
+    // Not available here (e.g. a BT controller that is not sleep-capable):
+    // fall back to the awake profile instead of leaving it half-applied.
+    POWERSAVING_DEBUG_PRINTLN("Light sleep unavailable, staying awake: %d", err);
+    configurePowerManagement(max_freq_mhz, min_freq_mhz, false);
+  }
 }
 
 esp_err_t PowerSaving::configurePowerManagement(int max_freq_mhz, int min_freq_mhz, bool light_sleep_enable) {
