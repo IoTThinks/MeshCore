@@ -136,6 +136,14 @@ static Adafruit_INA260 INA260;
 static INA226 INA226(TELEM_INA226_ADDRESS, TELEM_WIRE);
 #endif
 
+#if ENV_INCLUDE_INA228
+#ifndef TELEM_INA228_ADDRESS
+#define TELEM_INA228_ADDRESS    0x43      // INA228 single channel current sensor I2C address
+#endif
+#include <Adafruit_INA228.h>
+static Adafruit_INA228 INA228;
+#endif
+
 #if ENV_INCLUDE_MLX90614
 #ifndef TELEM_MLX90614_ADDRESS
 #define TELEM_MLX90614_ADDRESS 0x5A      // MLX90614 IR temperature sensor I2C address
@@ -428,6 +436,19 @@ static void query_ina226(uint8_t ch, uint8_t, CayenneLPP& lpp) {
 }
 #endif
 
+#if ENV_INCLUDE_INA228
+static uint8_t init_ina228(TwoWire* wire, uint8_t addr) {
+  // INA228 static instance was constructed with the address; begin() uses it.
+  return INA228.begin(addr, wire) ? 1 : 0;
+}
+static void query_ina228(uint8_t ch, uint8_t, CayenneLPP& lpp) {
+  lpp.addVoltage(ch, INA228.getBusVoltage_V());
+  lpp.addCurrent(ch, INA228.getCurrent_mA() / 1000.0f);
+  lpp.addPower(ch, INA228.getPower_mW() / 1000.0f);
+  lpp.addEnergy(ch, INA228.readEnergy() / 1000.0f);
+}
+#endif
+
 #if ENV_INCLUDE_MLX90614
 static uint8_t init_mlx90614(TwoWire* wire, uint8_t addr) {
   return MLX90614.begin(addr, wire) ? 2 : 0;  // 2 channels: object temp, ambient temp
@@ -612,6 +633,9 @@ static const SensorDef SENSOR_TABLE[] = {
 #endif
 #if ENV_INCLUDE_INA226
   { TELEM_INA226_ADDRESS,  "INA226",       init_ina226,   query_ina226   },
+#endif
+#if ENV_INCLUDE_INA228
+  { TELEM_INA228_ADDRESS,  "INA228",       init_ina228,   query_ina228   },
 #endif
 #if ENV_INCLUDE_MLX90614
   { TELEM_MLX90614_ADDRESS,"MLX90614",     init_mlx90614, query_mlx90614 },
