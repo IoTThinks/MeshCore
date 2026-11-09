@@ -16,6 +16,7 @@ on:
 
 jobs:
   build:
+    name: Build ${{ inputs.env }} @ ${{ inputs.ref }}
     runs-on: ubuntu-latest
     steps:
       - name: Validate inputs
