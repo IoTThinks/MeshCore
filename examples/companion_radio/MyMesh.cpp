@@ -2221,6 +2221,94 @@ bool MyMesh::handleCommand(const char* command, uint32_t sender_timestamp, char*
     return true;
   }
 
+  // PowerSaving variant
+  // To set GPS commands
+#if ENV_INCLUDE_GPS == 1
+  if (strcmp(command, "gps on") == 0) {
+    if (sensors.setSettingValue("gps", "1")) {
+      _prefs.gps_enabled = 1;
+      savePrefs();
+
+      // PowerSaving variant
+      if (_prefs.powersaving_enabled) {
+        strcpy(reply, "on (powersaving)");
+      } else { // Normal mode
+        strcpy(reply, "ok");
+      }
+    } else {
+      strcpy(reply, "gps toggle not found");
+    }
+    return true;
+  }
+  if (strcmp(command, "gps off") == 0) {
+    if (sensors.setSettingValue("gps", "0")) {
+      _prefs.gps_enabled = 0;
+      savePrefs();
+      strcpy(reply, "ok");
+    } else {
+      strcpy(reply, "gps toggle not found");
+    }
+    return true;
+  }
+  if (strcmp(command, "gps sync") == 0) {
+    LocationProvider *l = sensors.getLocationProvider();
+    if (l != NULL) {
+      l->syncTime();
+      strcpy(reply, "ok");
+    } else {
+      strcpy(reply, "gps provider not found");
+    }
+    return true;
+  }
+  if (strcmp(command, "gps") == 0) {
+    LocationProvider *l = sensors.getLocationProvider();
+    if (l != NULL) {
+      bool enabled = l->isEnabled(); // is EN pin on ?
+      bool fix = l->isValid();       // has fix ?
+      int sats = l->satellitesCount();
+      // PowerSaving variant
+      bool active =
+          !strcmp(sensors.getSettingByKey("gps") ?: "0", "1"); // Use "0" if GPS setting is not found
+
+      // PowerSaving variant
+      if (l->isPowerSavingEnabled()) { // GPS Power Saving
+        if (active) {
+          if (enabled) {
+            unsigned long mins = (l->getNextSleep() - millis()) / 60000UL;
+            sprintf(reply, "on, powered (powersaving, sleep in %luh %lum), %s, %d sats", mins / 60UL,
+                    mins % 60UL, fix ? "fix" : "no fix", sats);
+          } else {
+            unsigned long mins = (l->getNextWake() - millis()) / 60000UL;
+            sprintf(reply, "on, unpowered (powersaving, wake in %luh %lum)", mins / 60UL, mins % 60UL);
+          }
+
+          // "last sync" from GPS
+          DateTime dt = DateTime(l->getLastValidTimeSync());
+          if (dt.unixtime() == 0) {
+            sprintf(reply + strlen(reply), ", last sync: none");
+          } else {
+            sprintf(reply + strlen(reply), ", last sync: %02d:%02d - %d/%d/%d UTC", dt.hour(), dt.minute(),
+                    dt.day(), dt.month(), dt.year());
+          }
+        } else {
+          sprintf(reply, "off, %s", enabled ? "powered" : "unpowered");
+        }
+      } else { // Normal mode
+        if (active) {
+          sprintf(reply, "on, %s, %s, %d sats", enabled ? "powered" : "unpowered", fix ? "fix" : "no fix",
+                  sats);
+        } else {
+          sprintf(reply, "off, %s", enabled ? "powered" : "unpowered");
+        }
+      }
+    } else {
+      strcpy(reply, "Can't find GPS");
+    }
+
+    return true;
+  }
+#endif
+
   if (strcmp(command, "board") == 0) {
     strcpy(reply, board.getManufacturerName());
     return true;
