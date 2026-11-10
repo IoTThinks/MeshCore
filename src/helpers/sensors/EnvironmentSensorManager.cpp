@@ -915,9 +915,17 @@ bool EnvironmentSensorManager::gpsIsAwake(uint8_t ioPin){
 
     _location = &RAK12500_provider;
     return true;
-  } else if (Serial1.available()) { // RAK12501 (L76K) on UART
+  } else if (Serial1.available()) {
     MESH_DEBUG_PRINTLN("Serial GPS init correctly and is turned on");
-    gpsResetPin = ioPin;  // WB_IO2
+#ifdef PIN_GPS_EN
+    if(PIN_GPS_EN){
+      gpsResetPin = PIN_GPS_EN;
+    } else {
+      gpsResetPin = ioPin; // WB_IO2
+    }
+#else
+    gpsResetPin = ioPin; // WB_IO2
+#endif
     serialGPSFlag = true;
     gps_active = true;
     gps_detected = true;
