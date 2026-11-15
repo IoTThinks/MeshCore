@@ -489,7 +489,11 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, char* command, char* re
       _prefs->powersaving_enabled = 1;
       savePrefs();
       // PowerSaving variant
+      #if defined(ESP_PLATFORM) && ARDUINO_USB_CDC_ON_BOOT == 1 && ARDUINO_USB_MODE == 1
+      strcpy(reply, "on - Immediate effect");
+      #else
       strcpy(reply, "on - After 5 minutes. Serial console will be off.");
+      #endif
 #elif defined(WITH_BRIDGE)
       strcpy(reply, "Bridge not supported");
 #else

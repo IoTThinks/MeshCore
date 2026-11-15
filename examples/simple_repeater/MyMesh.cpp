@@ -1543,11 +1543,35 @@ void MyMesh::loop() {
   last_millis = now;
 }
 
+// Only for boards using HW USB CDC (Heltec V4, XIAO S3/C3/C6...)
+#if defined(ESP_PLATFORM) && ARDUINO_USB_CDC_ON_BOOT == 1 && ARDUINO_USB_MODE == 1
+#define USB_UNPLUG_DELAY_MS 5000
+
+inline bool isUsbConnected() {
+  static uint32_t lastPluggedMs = 0;
+
+  // PC detected: Save the time
+  if (Serial.isPlugged()) lastPluggedMs = millis();
+
+  // Has not plugged to PC
+  if (lastPluggedMs == 0) return false;
+
+  return millis() - lastPluggedMs < USB_UNPLUG_DELAY_MS;
+}
+
+#endif
+
 // To check if there is pending work
 bool MyMesh::hasPendingWork() const {
 #if defined(WITH_BRIDGE)
   if (bridge.isRunning()) return true;  // bridge needs WiFi radio, can't sleep
 #endif
+
+// For boards using HW USB CDC, skip sleep if connected to PC via USB
+#if defined(ESP_PLATFORM) && ARDUINO_USB_CDC_ON_BOOT == 1 && ARDUINO_USB_MODE == 1
+  if (isUsbConnected()) return true;
+#endif
+
   // PowerSaving variant
   return _mgr->getOutboundTotal() > 0 || _mgr->getInboundTotal() > 0 ||  // rxdelay packets wait in the inbound queue
          isTransmitting() || _prefs.getRadioPrefs()->isRxPowerSavingCalibrationActive();
