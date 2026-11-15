@@ -54,12 +54,15 @@ void ESP32Board::shutdownPeripherals() {
   // Power off LoRa
   radio_driver.powerOff();
 
+  // PowerSaving variant
   // Keep LoRa inactive during deepsleep
+#ifdef P_LORA_NSS
   digitalWrite(P_LORA_NSS, HIGH);
 #if defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6)
   gpio_hold_en((gpio_num_t)P_LORA_NSS);
 #else
   rtc_gpio_hold_en((gpio_num_t)P_LORA_NSS);
+#endif
 #endif
 
   // Power off GPS if any
