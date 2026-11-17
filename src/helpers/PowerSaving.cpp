@@ -18,7 +18,7 @@ void PowerSaving::enableCompanionPowerSaving() {
 
   // Configure Power Management
 #if defined(BLE_PIN_CODE)
-  configurePowerManagement(80, 10, false);
+  configurePowerManagement(80, 10, false); // Should be true for new boards
 #endif
 }
 
@@ -59,4 +59,22 @@ esp_err_t PowerSaving::configurePowerManagement(int max_freq_mhz, int min_freq_m
 
   return errPM;
 }
+#endif // ESP32_PLATFORM
+
+// Only for boards using HW USB CDC (Heltec V4, XIAO S3/C3/C6...)
+#if defined(ESP_PLATFORM) && ARDUINO_USB_CDC_ON_BOOT == 1 && ARDUINO_USB_MODE == 1
+#define USB_UNPLUG_DELAY_MS 5000
 #endif
+
+// Return true if MCU needs to stay awake for USB
+bool PowerSaving::hasUsbPendingWork() {
+#if defined(ESP_PLATFORM) && ARDUINO_USB_CDC_ON_BOOT == 1 && ARDUINO_USB_MODE == 1
+  static uint32_t lastPluggedMs = 0;
+  if (Serial.isPlugged()) lastPluggedMs = millis(); // PC detected: Save the time
+  if (lastPluggedMs == 0) return false; // Has not plugged to PC
+
+  return millis() - lastPluggedMs < USB_UNPLUG_DELAY_MS;
+#else
+  return false; // UART boards (Heltec V3), nRF52, etc.
+#endif
+}
