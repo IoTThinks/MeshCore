@@ -341,6 +341,9 @@ void loop() {
     applied_powersaving = the_mesh.getNodePrefs()->powersaving_enabled;
     PowerSaving::applyCompanionPowerSaving(applied_powersaving);
   }
+
+  // no auto light sleep while connected to USB host
+  PowerSaving::updateUsbPowerLocks();
 #endif
 
 #ifdef ENABLE_WIFI_INTERFACE
