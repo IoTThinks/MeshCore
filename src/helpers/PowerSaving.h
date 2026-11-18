@@ -11,6 +11,13 @@
 #include "driver/uart.h"
 #endif
 
+// Boards using HW USB CDC (Heltec V4, XIAO S3/C3/C6...)
+#if defined(ESP32_PLATFORM) && ARDUINO_USB_CDC_ON_BOOT == 1 && ARDUINO_USB_MODE == 1
+#define ESP32_HW_USB_CDC 1
+#else
+#define ESP32_HW_USB_CDC 0
+#endif
+
 class PowerSaving {
 public:
 #if defined(ESP32_PLATFORM)
@@ -21,4 +28,5 @@ public:
 #endif
 
   static bool hasUsbPendingWork();
+  static void updateUsbPowerLocks(); // Call in loop(): blocks auto light sleep while a PC is connected
 };
