@@ -239,8 +239,12 @@ void RadioLibWrapper::loop() {
   noiseFloorCalibCheck();
 
   if (state == STATE_RX && _num_floor_samples < NUM_NOISE_FLOOR_SAMPLES) {
-    if (!_rx_ps_armed && !(_nf_calib_active && (long)(millis() - _nf_sample_from) < 0) &&
-        !isReceivingPacket()) {
+    // RSSI read right after an RX (re)start is not valid yet; skip samples until
+    // the settle window stamped by startReceiveMode() has passed. The check
+    // is bounded so a stale stamp cannot cause a long sampling pause.
+    unsigned long settle_left = _nf_sample_from - millis();
+    bool settling = settle_left != 0 && settle_left <= NF_CALIB_SETTLE_MS;
+    if (!_rx_ps_armed && !settling && !isReceivingPacket()) {
       sampleNoiseFloorOnce();
     }
   } else if (publishNoiseFloor()) {
@@ -274,6 +278,7 @@ int16_t RadioLibWrapper::startReceiveMode() {
   if (!_rx_ps_enabled || _nf_calib_active) {
     _rx_ps_armed = false;
     const int16_t err = startContinuousReceive();
+    if (err == RADIOLIB_ERR_NONE) _nf_sample_from = millis() + NF_CALIB_SETTLE_MS;
     _rx_ps_last_error = err;
     return err;
   }
@@ -283,7 +288,8 @@ int16_t RadioLibWrapper::startReceiveMode() {
     // every RX restart. A config change (setRxPowerSaving) re-enables retries.
     _rx_ps_armed = false;
     const int16_t err = startContinuousReceive();
-    if (err != RADIOLIB_ERR_NONE) _rx_ps_last_error = err;
+    if (err == RADIOLIB_ERR_NONE) _nf_sample_from = millis() + NF_CALIB_SETTLE_MS;
+    else _rx_ps_last_error = err;
     return err;
   }
 
@@ -317,7 +323,8 @@ int16_t RadioLibWrapper::startReceiveMode() {
   MESH_DEBUG_PRINTLN("RadioLibWrapper: startReceiveDutyCycle(%d), continuous RX fallback", err);
   stopDutyCycleHardware();
   int16_t fallback_err = startContinuousReceive();
-  if (fallback_err != RADIOLIB_ERR_NONE) _rx_ps_last_error = fallback_err;
+  if (fallback_err == RADIOLIB_ERR_NONE) _nf_sample_from = millis() + NF_CALIB_SETTLE_MS;
+  else _rx_ps_last_error = fallback_err;
   return fallback_err;
 }
 
