@@ -191,6 +191,10 @@ class RxPowerSavingControl {
 public:
   virtual ~RxPowerSavingControl() = default;
 
+  // Level the next periods come from, 0 for manual ones. Set before
+  // setRxPowerSaving(); a driver may round level periods differently.
+  virtual void setRxPowerSavingLevel(uint8_t level) { (void)level; }
+
   virtual bool setRxPowerSaving(bool enabled, uint32_t rx_us, uint32_t sleep_us) {
     (void)rx_us;
     (void)sleep_us;

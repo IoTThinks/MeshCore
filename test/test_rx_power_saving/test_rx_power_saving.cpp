@@ -13,10 +13,14 @@ public:
   bool requested_enabled = false;
   uint32_t requested_rx_us = 0;
   uint32_t requested_sleep_us = 0;
+  uint8_t level = 0, level_at_apply = 0;
   RxPowerSavingStatus status;
+
+  void setRxPowerSavingLevel(uint8_t value) override { level = value; }
 
   bool setRxPowerSaving(bool enabled, uint32_t rx_us, uint32_t sleep_us) override {
     set_called = true;
+    level_at_apply = level;
     requested_enabled = enabled;
     requested_rx_us = rx_us;
     requested_sleep_us = sleep_us;
@@ -34,6 +38,34 @@ TEST(RxPowerSaving, DefaultsKeepRepeaterDisabledWithBalancedIntent) {
   EXPECT_EQ(config.preamble, RX_POWERSAVING_PROFILE_PREAMBLE);
   EXPECT_EQ(config.rx_us, RX_POWERSAVING_DEFAULT_RX_US);
   EXPECT_EQ(config.sleep_us, RX_POWERSAVING_DEFAULT_SLEEP_US);
+}
+
+TEST(RxPowerSaving, PassesTheLevelBeforeApplyingStoredPeriods) {
+  FakeRxPowerSavingControl control;
+  RxPowerSavingConfig config;
+  config.enabled = 1;
+  config.preamble = 32;
+  for (uint8_t level : {10, 9, 0}) {
+    config.level = level;
+    ASSERT_TRUE(applyRxPowerSavingConfig(&config, 8, 62.5f, &control));
+    EXPECT_EQ(control.level_at_apply, level);
+  }
+}
+
+TEST(RxPowerSaving, CliPassesTheNewLevelAndZeroForManualPeriods) {
+  FakeRxPowerSavingControl control;
+  RxPowerSavingConfig config;
+  char reply[160];
+  const struct { const char* command; uint8_t level; } cases[] = {
+    {"level 10 preamble 32", 10}, {"level 9 preamble 32", 9},
+    {"30016 111507", 0}, {"level 10 preamble 32", 10}, {"off", 10},
+  };
+  for (auto c : cases) {
+    SCOPED_TRACE(c.command);
+    ASSERT_TRUE(RXPowerSavingCLI::set(c.command, 8, 62.5f, &config, &control, reply, sizeof(reply)));
+    EXPECT_EQ(control.level_at_apply, c.level);
+    EXPECT_EQ(config.level, c.level);
+  }
 }
 
 TEST(RxPowerSaving, BaseControlRejectsEnableAndAcceptsContinuousRx) {

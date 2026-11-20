@@ -188,6 +188,15 @@ bool RXPowerSavingCLI::set(const char* value, uint8_t sf, float bw,
     return false;
   }
 
+  if (level_requested) {
+    proposed.level = level;
+    proposed.preamble = preamble_overridden ? preamble : 0;
+  } else if (strcmp(value, "off") != 0) {
+    proposed.level = 0;
+    proposed.preamble = 0;
+  }
+  if (control) control->setRxPowerSavingLevel(proposed.level);
+
   bool applied = control != nullptr
       ? control->setRxPowerSaving(proposed.enabled != 0, proposed.rx_us, proposed.sleep_us)
       : proposed.enabled == 0;
@@ -197,14 +206,6 @@ bool RXPowerSavingCLI::set(const char* value, uint8_t sf, float bw,
   }
 
   if (control) control->setRxPowerSavingConfigError(false);
-
-  if (level_requested) {
-    proposed.level = level;
-    proposed.preamble = preamble_overridden ? preamble : 0;
-  } else if (strcmp(value, "off") != 0) {
-    proposed.level = 0;
-    proposed.preamble = 0;
-  }
 
   *config = proposed;
   snprintf(reply, reply_size, "OK - %s,level=%lu%s,preamble=%lu,rx=%lu,sleep=%lu",
