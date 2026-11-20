@@ -24,10 +24,10 @@ class SerialBLEInterface : public BaseSerialInterface, BLESecurityCallbacks, BLE
   // BLE power tuning
   uint16_t _adv_ms = 200;   // Advertising interval. 0 = stack default
   int8_t _tx_dbm = 3;        // TX Power. ESP32 default is +3 dBm
-  uint16_t _conn_ms = 100;   // Idle connection interval. 0 = leave the interval to the phone
-  uint8_t _conn_latency = 2; // Idle slave latency (also the iOS-safe cap)
-  uint16_t _sync_ms = 30;    // Fast interval while the app is talking. 0 = never switch
-  uint16_t _quiet_s = 5;     // Seconds of BLE silence before dropping to conn/lat
+  uint16_t _conn_ms = 60;   // Idle connection interval. 0 = leave the interval to the phone
+  uint8_t _conn_latency = 1; // Idle slave latency (also the iOS-safe cap)
+  uint16_t _sync_ms = 15;    // Fast interval while the app is talking. 0 = never switch
+  uint16_t _quiet_s = 2;     // Seconds of BLE silence before dropping to conn/lat
 
   bool _fast;             // currently on the sync profile
   uint8_t _burst;         // frames counted towards the next fast switch
