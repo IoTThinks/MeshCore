@@ -205,6 +205,7 @@ bool applyRxPowerSavingConfig(RxPowerSavingConfig* config, uint8_t sf, float bw,
   const bool valid = !config->enabled || normalizeRxPowerSavingConfig(
       config, sf, bw, rxPowerSavingCaptureCost(control), rxPowerSavingTransition(control));
   if (control == nullptr) return !config->enabled;
+  control->setRxPowerSavingLevel(config->level);
   const bool accepted = control->setRxPowerSaving(
       config->enabled && valid, config->rx_us, config->sleep_us);
   control->setRxPowerSavingConfigError(!valid);

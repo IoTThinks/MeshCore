@@ -34,6 +34,7 @@ protected:
   bool _rx_ps_restart_pending = false;
   bool _rx_ps_config_error = false;
   bool _rx_ps_enabled;
+  uint8_t _rx_ps_level = 0;
   bool _rx_ps_armed;
   uint32_t _rx_ps_rx_us;
   uint32_t _rx_ps_sleep_us;
@@ -108,6 +109,7 @@ public:
   virtual bool supportsRxPowerSaving() const { return false; }
   void setRxPowerSavingConfigError(bool invalid) override { _rx_ps_config_error = invalid; }
   bool setRxPowerSaving(bool enabled, uint32_t rx_us, uint32_t sleep_us) override;
+  void setRxPowerSavingLevel(uint8_t level) override { _rx_ps_level = level; }
   RxPowerSavingStatus getRxPowerSavingStatus() const override;
   bool isRxPowerSavingCalibrationActive() const override { return _nf_calib_active; }
 

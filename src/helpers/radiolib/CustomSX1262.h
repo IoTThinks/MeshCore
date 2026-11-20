@@ -5,6 +5,7 @@
 
 // PowerSaving variant
 #include "RXPowerSaving.h"   // MC_TCXO_DELAY_US
+#include "SX1262RxPowerSaving.h"   // SX1262SymbolTimeout
 
 class CustomSX1262 : public SX1262 {
   uint32_t _preambleMillis = 66;
@@ -144,10 +145,17 @@ class CustomSX1262 : public SX1262 {
     }
 
     // PowerSaving variant
+    // symbolTimeout 0 turns the symbol timeout off. It is written from standby,
+    // before RadioLib stages RX; the wrapper sets it back to 0 when it stops.
     int16_t startReceiveDutyCycle(uint32_t rxPeriod, uint32_t sleepPeriod,
                                   RadioLibIrqFlags_t irqFlags = RADIOLIB_IRQ_RX_DEFAULT_FLAGS,
-                                  RadioLibIrqFlags_t irqMask = RADIOLIB_IRQ_RX_DEFAULT_MASK) {
-      int16_t state = SX1262::startReceiveDutyCycle(rxPeriod, sleepPeriod, irqFlags, irqMask);
+                                  RadioLibIrqFlags_t irqMask = RADIOLIB_IRQ_RX_DEFAULT_MASK,
+                                  uint8_t symbolTimeout = 0) {
+      int16_t state = standby();
+      RADIOLIB_ASSERT(state);
+      state = setRxSymbolTimeout(symbolTimeout);
+      RADIOLIB_ASSERT(state);
+      state = SX1262::startReceiveDutyCycle(rxPeriod, sleepPeriod, irqFlags, irqMask);
       if (state == RADIOLIB_ERR_NONE) {
         // RadioLib stages RX through standby, which leaves a host-controlled
         // RXEN switch in IDLE. Set it back to RX for the whole duty-cycle;
@@ -218,6 +226,18 @@ class CustomSX1262 : public SX1262 {
 
       rtcEvent |= 0x02;
       return writeRegister(RADIOLIB_SX126X_REG_EVENT_MASK, &rtcEvent, 1);
+    }
+
+    // PowerSaving variant
+    // SetLoRaSymbNumTimeout; 0 turns it off. Like LoRaMac-node, a nonzero count
+    // is also written straight to the sync timeout register.
+    int16_t setRxSymbolTimeout(uint8_t symbols) {
+      const SX1262SymbolTimeout timeout = sx1262SymbolTimeout(symbols);
+      int16_t state = this->mod->SPIwriteStream(RADIOLIB_SX126X_CMD_SET_LORA_SYMB_NUM_TIMEOUT,
+                                                &timeout.count, 1);
+      RADIOLIB_ASSERT(state);
+      if (symbols == 0) return RADIOLIB_ERR_NONE;
+      return writeRegister(RADIOLIB_SX126X_REG_LORA_SYNC_TIMEOUT, &timeout.reg, 1);
     }
 
     void setPreambleMillis(uint32_t preambleMillis) {
