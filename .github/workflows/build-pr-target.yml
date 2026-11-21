@@ -1,0 +1,80 @@
+name: Build MeshCore PR target
+run-name: Build ${{ inputs.env }} @ PR-${{ inputs.pr }}
+
+# Builds one target of an open pull request, exactly as written (refs/pull/<pr>/head).
+# Started by the Easy SkyMesh Worker. The code of a PR has not been reviewed, so:
+#  - the job token can only read the repository, and no secrets are used;
+#  - the PlatformIO cache is only restored (from the release builds), never saved;
+#  - the Worker starts this workflow on the "pr-builds" branch, not on main, so anything the PR code
+#    writes to the Actions cache stays on that branch and can never be restored by a release build.
+# This file must be on main (so GitHub knows the workflow) and on the pr-builds branch (the copy that runs).
+
+on:
+  workflow_dispatch:
+    inputs:
+      env:
+        description: PlatformIO env to build (e.g. Heltec_v3_repeater)
+        required: true
+      pr:
+        description: Pull request number of IoTThinks/MeshCore (e.g. 38)
+        required: true
+      base:
+        description: Base branch of the PR, used to restore the PlatformIO cache (optional)
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ inputs.env }} @ PR-${{ inputs.pr }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate inputs
+        env:
+          ENV_NAME: ${{ inputs.env }}
+          PR: ${{ inputs.pr }}
+          BASE: ${{ inputs.base }}
+        run: |
+          [[ "$PR" =~ ^[0-9]{1,6}$ ]] || { echo "Bad PR number"; exit 1; }
+          [[ "$ENV_NAME" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "Bad env name"; exit 1; }
+          [[ -z "$BASE" || "$BASE" =~ ^[A-Za-z0-9_./-]+$ ]] || { echo "Bad base branch"; exit 1; }
+
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ inputs.pr }}/head
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Restore only: the release builds' cache of the PR's base branch speeds up the build.
+      - uses: actions/cache/restore@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ inputs.base }}-${{ inputs.env }}
+
+      - run: pip install platformio
+
+      - name: Version from last commit date
+        id: ver
+        env:
+          PR: ${{ inputs.pr }}
+        run: |
+          # e.g. PR38.1121 for a last commit on 21 Nov 2026 (UTC)
+          DATE=$(TZ=UTC git log -1 --date=format-local:%m%d --format=%cd)
+          echo "version=PR${PR}.${DATE}" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        env:
+          ENV_NAME: ${{ inputs.env }}
+          FIRMWARE_VERSION: ${{ steps.ver.outputs.version }}
+        run: bash build.sh build-firmware "$ENV_NAME"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.env }}
+          path: out/*
+          retention-days: 30
+          if-no-files-found: error
