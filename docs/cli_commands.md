@@ -462,9 +462,11 @@ This document provides an overview of CLI commands that can be sent to MeshCore 
 
 **Note:** When enabled, device enters sleep mode between radio transmissions
 
-With power saving enabled on supported ESP32 builds, the CPU idles at 5 MHz and runs at up to 40 MHz in Companion mode or 20 MHz in other roles. BLE has a 40 MHz idle floor and can boost to 80 MHz for radio activity. Native USB without BLE or Wi-Fi uses 40 MHz. If the SDK rejects a 5 MHz floor, the firmware tries 10 MHz and falls back to the board clock if needed.
+With power saving enabled on supported ESP32 builds, the CPU idles at 5 MHz and runs at up to 40 MHz in Companion mode or 20 MHz in other roles. BLE has a 40 MHz idle floor and can boost to 80 MHz for radio activity. If the SDK rejects a 5 MHz floor, the firmware tries 10 MHz and falls back to the board clock if needed.
 
-A Wi-Fi Companion connected to an access point uses modem sleep between beacons. Its CPU can idle at 5 MHz (40 MHz with BLE or an active native USB host) and boost to 80 MHz for traffic. Wi-Fi OTA access points and ESP-NOW bridges use the board's normal clock or at least 80 MHz.
+A Wi-Fi Companion connected to an access point uses modem sleep between beacons. Its CPU can idle at 5 MHz (40 MHz with BLE) and boost to 80 MHz for traffic. Wi-Fi OTA access points and ESP-NOW bridges use the board's normal clock or at least 80 MHz.
+
+A detected native USB host takes priority over these clock ranges. The CPU holds the board's normal clock or at least 80 MHz while connected. On the Heltec V4, USB data frames from the host trigger this automatically, even with the serial terminal closed. Five seconds after the frames stop, the firmware resumes the clock range for the active radios. A power-only USB charger allows normal power saving.
 
 Repeaters, room servers and sensors keep their existing light-sleep behavior. Native USB activity keeps the CPU awake so the host can communicate. On ESP32 companions, the existing automatic light-sleep support depends on the connection and SDK. nRF52 companions sleep between events regardless of the flag.
 

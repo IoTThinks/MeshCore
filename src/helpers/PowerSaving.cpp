@@ -67,20 +67,19 @@ void PowerSaving::updateCpuClock(bool enabled, bool companion) {
 #endif
   CpuClock clock = normal;
   const wifi_mode_t wifi = wifiMode();
-  if (wifi != WIFI_MODE_NULL) {
-    const int wifi_mhz = normal_mhz < 80 ? 80 : normal_mhz;
-    clock = {wifi_mhz, wifi_mhz, false};
+  const bool usb_host = hasUsbPendingWork();
+  if (usb_host || wifi != WIFI_MODE_NULL) {
+    const int peripheral_mhz = normal_mhz < 80 ? 80 : normal_mhz;
+    clock = {peripheral_mhz, peripheral_mhz, false};
 #if defined(ENABLE_WIFI_INTERFACE)
-    if (enabled && companion && wifi == WIFI_MODE_STA) {
+    if (!usb_host && enabled && companion && wifi == WIFI_MODE_STA) {
       // The station driver holds the 80 MHz bus lock while its modem is awake.
-      clock = {bleIsOn() || hasUsbPendingWork() ? 40 : 5, 80, false};
+      clock = {bleIsOn() ? 40 : 5, 80, false};
     }
 #endif
   } else if (enabled && bleIsOn()) {
     // BLE can idle at 40 MHz and request an 80 MHz bus clock for radio events.
     clock = {40, 80, light_sleep};
-  } else if (enabled && hasUsbPendingWork()) {
-    clock = {40, 40, light_sleep};
   } else if (enabled) {
     clock = {5, companion ? 40 : 20, light_sleep};
   }
@@ -144,10 +143,15 @@ esp_err_t PowerSaving::configurePowerManagement(int max_freq_mhz, int min_freq_m
 bool PowerSaving::hasUsbPendingWork() {
 #if ESP32_HW_USB_CDC
   static uint32_t lastPluggedMs = 0;
-  if (Serial.isPlugged()) lastPluggedMs = millis(); // PC detected: Save the time
-  if (lastPluggedMs == 0) return false; // Has not plugged to PC
-
-  return millis() - lastPluggedMs < USB_UNPLUG_DELAY_MS;
+  static bool host_present = false;
+  const uint32_t now = millis();
+  if (Serial.isPlugged()) {
+    host_present = true;
+    lastPluggedMs = now;
+  } else if (now - lastPluggedMs >= USB_UNPLUG_DELAY_MS) {
+    host_present = false;
+  }
+  return host_present;
 #elif defined(ESP32_PLATFORM) && ARDUINO_USB_CDC_ON_BOOT == 1
   return static_cast<bool>(Serial);
 #else
@@ -156,7 +160,7 @@ bool PowerSaving::hasUsbPendingWork() {
 }
 
 // Hold a PM lock while a PC is connected, so auto light sleep never breaks
-// USB serial. Released when the PC is gone. Frequency scaling stays allowed.
+// USB serial. Released when the PC is gone.
 void PowerSaving::updateUsbPowerLocks() {
 #if ESP32_HW_USB_CDC && CONFIG_PM_ENABLE
   // Lock handle and state are "static" so they persist between loop() calls
