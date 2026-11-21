@@ -307,6 +307,10 @@ void setup() {
 }
 
 void loop() {
+#if defined(ESP32_PLATFORM)
+  PowerSaving::updateCpuClock(the_mesh.getNodePrefs()->powersaving_enabled, true);
+  PowerSaving::updateUsbPowerLocks();
+#endif
   the_mesh.loop();
   interface_manager.loop();
   sensors.loop();
@@ -331,6 +335,8 @@ void loop() {
       if(!usb_serial_interface.isReadBusy() && !usb_serial_interface.isWriteBusy()){
         vTaskDelay(pdMS_TO_TICKS(10)); // attempt to sleep
       }
+  #else
+      delay(1); // Let the idle task lower the CPU clock.
   #endif
 #endif
   }
@@ -341,9 +347,6 @@ void loop() {
     applied_powersaving = the_mesh.getNodePrefs()->powersaving_enabled;
     PowerSaving::applyCompanionPowerSaving(applied_powersaving);
   }
-
-  // no auto light sleep while connected to USB host
-  PowerSaving::updateUsbPowerLocks();
 #endif
 
 #ifdef ENABLE_WIFI_INTERFACE

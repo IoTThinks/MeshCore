@@ -2596,5 +2596,10 @@ bool MyMesh::advert() {
 // PowerSaving variant
 // To check if there is pending work
 bool MyMesh::hasPendingWork() const {
-  return _mgr->getOutboundTotal() > 0 || dirty_contacts_expiry != 0 || isTransmitting() || _prefs.getRadioPrefs()->isRxPowerSavingCalibrationActive();
+  // ESP32 checks the save deadline again after each short idle delay.
+#if !defined(ESP32_PLATFORM)
+  if (dirty_contacts_expiry) return true;
+#endif
+  return _mgr->getOutboundTotal() > 0 || isTransmitting()
+      || _prefs.getRadioPrefs()->isRxPowerSavingCalibrationActive();
 }
