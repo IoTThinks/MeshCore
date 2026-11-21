@@ -2,6 +2,9 @@
 
 #if defined(ESP32_PLATFORM)
 #include <esp_wifi.h>
+#if defined(ENABLE_WIFI_INTERFACE)
+#include <WiFi.h>
+#endif
 
 // Let LoRa-only images use the same policy without pulling in the Wi-Fi driver.
 extern "C" esp_err_t esp_wifi_get_mode(wifi_mode_t* mode) __attribute__((weak));
@@ -29,9 +32,9 @@ int normalCpuClock(bool companion) {
 #endif
 }
 
-bool wifiIsOn() {
+wifi_mode_t wifiMode() {
   wifi_mode_t mode;
-  return esp_wifi_get_mode && esp_wifi_get_mode(&mode) == ESP_OK && mode != WIFI_MODE_NULL;
+  return esp_wifi_get_mode && esp_wifi_get_mode(&mode) == ESP_OK ? mode : WIFI_MODE_NULL;
 }
 
 bool bleIsOn() {
@@ -44,6 +47,9 @@ bool bleIsOn() {
 } // namespace
 
 void PowerSaving::applyCompanionPowerSaving(bool enabled) {
+#if defined(ENABLE_WIFI_INTERFACE)
+  WiFi.setSleep(enabled);  // Station modem sleep wakes for each DTIM beacon.
+#endif
 #if defined(BLE_PIN_CODE) && !CONFIG_IDF_TARGET_ESP32C6
   if (enabled) esp_bt_sleep_enable();
   else esp_bt_sleep_disable();
@@ -60,9 +66,16 @@ void PowerSaving::updateCpuClock(bool enabled, bool companion) {
   const bool light_sleep = false;
 #endif
   CpuClock clock = normal;
-  if (wifiIsOn()) {
+  const wifi_mode_t wifi = wifiMode();
+  if (wifi != WIFI_MODE_NULL) {
     const int wifi_mhz = normal_mhz < 80 ? 80 : normal_mhz;
     clock = {wifi_mhz, wifi_mhz, false};
+#if defined(ENABLE_WIFI_INTERFACE)
+    if (enabled && companion && wifi == WIFI_MODE_STA) {
+      // The station driver holds the 80 MHz bus lock while its modem is awake.
+      clock = {bleIsOn() || hasUsbPendingWork() ? 40 : 5, 80, false};
+    }
+#endif
   } else if (enabled && bleIsOn()) {
     // BLE can idle at 40 MHz and request an 80 MHz bus clock for radio events.
     clock = {40, 80, light_sleep};
