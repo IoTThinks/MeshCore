@@ -15,6 +15,14 @@ class HeltecV4Board : public ESP32Board {
   bool setLoRaFemLnaEnabled(bool enable);
   bool isLoRaFemLnaEnabled() const;
 
+  // PowerSaving variant
+  bool fem_rxps = true;
+  bool fem_rxps_active = false;
+  uint32_t fem_rxps_sleeps = 0;
+  const char* femRxpsInactive();
+  void femRxpsBoot();
+  void femRxpsRelease();
+
 protected:
   float adc_mult = ADC_MULTIPLIER;
 
@@ -27,6 +35,8 @@ public:
   void attachDynamicPrefs(KeyValueStore* prefs);
   bool handleCommand(const char* command, uint32_t sender_timestamp, char* reply) override;
 
+  void onBeforeLightSleep() override;
+  void onAfterLightSleep() override;
   void onBeforeTransmit(void) override;
   void onAfterTransmit(void) override;
   void shutdownPeripherals() override;

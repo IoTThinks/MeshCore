@@ -68,6 +68,10 @@ public:
   virtual void setFEMTxGain(uint8_t g) = 0;
 
   // PowerSaving variant
+  virtual uint8_t getFEMRxps() const { return 1; }
+  virtual void setFEMRxps(uint8_t on) { }
+
+  // PowerSaving variant
   virtual RxPowerSavingConfig* getRxPowerSavingConfig() { return nullptr; }
   bool applyRxPowerSaving(uint8_t sf, float bw);
   bool isRxPowerSavingCalibrationActive() const;

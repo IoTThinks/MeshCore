@@ -40,6 +40,16 @@ bool CommonRadioPrefs::getByKey(const char* key, char* value, size_t max_len) {
     snprintf(value, max_len, "%d", (uint32_t)getFEMTxGain());
     return true;
   }
+  // PowerSaving variant
+  if (strcmp(key, "fem_rxps") == 0) {
+    snprintf(value, max_len, "%d", (uint32_t)getFEMRxps());
+    return true;
+  }
+  if (strcmp(key, "rxps_en") == 0) {
+    const auto* config = getRxPowerSavingConfig();
+    snprintf(value, max_len, "%d", config && config->enabled ? 1 : 0);
+    return true;
+  }
   return false;
 }
 bool CommonRadioPrefs::setByKey(const char* key, const char* value) {
@@ -50,6 +60,12 @@ bool CommonRadioPrefs::setByKey(const char* key, const char* value) {
   }
   if (strcmp(key, "fem_txgain") == 0) {
     setFEMTxGain(atoi(value));
+    markDirty();
+    return true;
+  }
+  // PowerSaving variant
+  if (strcmp(key, "fem_rxps") == 0) {
+    setFEMRxps(atoi(value) ? 1 : 0);
     markDirty();
     return true;
   }
