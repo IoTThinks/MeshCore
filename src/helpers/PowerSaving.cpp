@@ -74,12 +74,12 @@ void PowerSaving::updateCpuClock(bool enabled, bool companion) {
 #if defined(ENABLE_WIFI_INTERFACE)
     if (!usb_host && enabled && companion && wifi == WIFI_MODE_STA) {
       // The station driver holds the 80 MHz bus lock while its modem is awake.
-      clock = {bleIsOn() ? 40 : 5, 80, false};
+      clock = {5, 80, false};
     }
 #endif
   } else if (enabled && bleIsOn()) {
-    // BLE can idle at 40 MHz and request an 80 MHz bus clock for radio events.
-    clock = {40, 80, light_sleep};
+    // The BLE controller requests an 80 MHz bus clock for radio events.
+    clock = {5, 80, light_sleep};
   } else if (enabled) {
     clock = {5, companion ? 40 : 20, light_sleep};
   }
