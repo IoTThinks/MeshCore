@@ -22,8 +22,8 @@ class PowerSaving {
 public:
 #if defined(ESP32_PLATFORM)
   static void applyCompanionPowerSaving(bool enabled);
-  static void enableCompanionPowerSaving();
-  static void disableCompanionPowerSaving();
+  static void updateCpuClock(bool enabled, bool companion = false);
+  static bool prepareWifi();
   static esp_err_t configurePowerManagement(int max_freq_mhz, int min_freq_mhz, bool light_sleep_enable);
 #endif
 

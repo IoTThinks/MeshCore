@@ -1,3 +1,4 @@
+#include "helpers/PowerSaving.h"
 #include "ESPNowBridge.h"
 
 #include <WiFi.h>
@@ -30,6 +31,10 @@ void ESPNowBridge::begin() {
   BRIDGE_DEBUG_PRINTLN("Initializing...\n");
 
   // Initialize WiFi in station mode
+  if (!PowerSaving::prepareWifi()) {
+    BRIDGE_DEBUG_PRINTLN("Could not restore the Wi-Fi clock");
+    return;
+  }
   WiFi.mode(WIFI_STA);
   
   // Set Wi-Fi channel

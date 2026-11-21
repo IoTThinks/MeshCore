@@ -1,3 +1,4 @@
+#include "helpers/PowerSaving.h"
 #include <Arduino.h>   // needed for PlatformIO
 #include <Mesh.h>
 
@@ -605,9 +606,15 @@ void setup() {
 }
 
 void loop() {
+#if defined(ESP32_PLATFORM)
+  PowerSaving::updateCpuClock(true);
+#endif
   the_mesh.loop();
   rtc_clock.tick();
 #ifdef HAS_EXTERNAL_WATCHDOG
   external_watchdog.loop();
+#endif
+#if defined(ESP32_PLATFORM)
+  if (!Serial.available()) delay(1);
 #endif
 }
