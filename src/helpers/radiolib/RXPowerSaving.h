@@ -1,3 +1,35 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jarosław Domański
+//
+// RX Power Saving (RXPS)
+// ======================
+// Lets the LoRa radio sleep between short receive windows instead of
+// listening all the time. The windows are sized so that a packet with a
+// long enough preamble is still caught.
+//
+// Written for Kevin Le's (IoTThinks) MeshCore PowerSaving firmware:
+// https://github.com/IoTThinks/MeshCore
+//
+// Author:  Jarosław Domański, https://github.com/Dom4n
+// Credits: Kevin Le (IoTThinks), https://github.com/IoTThinks:
+//          integration into PowerSaving v17 and v18, fixes listed below
+// Radios:  SX1262, LR1110
+//
+// Usage:   docs/cli_commands.md, section "RX power saving (RXPS)"
+//
+// Versions (major: large or power-relevant change, minor: fix)
+//   v1    2026-07  RX duty cycle with levels, noise floor calibration, CLI
+//   v1.1  2026-08  LR1110 fix (Kevin Le)
+//   v2    2026-08  timings from bench measurements, datasheet timer guard,
+//                  sleep floor, TCXO delay 1600 us; ported to v1.18 in 2026-10
+//   v2.1  2026-09  RXPS in sensor firmware (Kevin Le)
+//   v2.2  2026-10  balanced profile by default on fresh installs (Kevin Le)
+//   v2.3  2026-10  LR1110 keeps the LF RC clock (Kevin Le)
+//   v3    2026-10  SX1262: stay on timer values that keep the post-preamble
+//                  wait short (IoTThinks PR #27)
+//   v4    2026-11  SX1262: stop listening right after a false preamble,
+//                  shorter windows on levels 1-9 (IoTThinks PR #37)
+
 #pragma once
 
 #include <stdint.h>

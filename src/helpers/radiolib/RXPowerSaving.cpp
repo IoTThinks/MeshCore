@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jarosław Domański, https://github.com/Dom4n
+//
+// RXPS: window calculator for the RXPS levels.
+// Written for Kevin Le's (IoTThinks) MeshCore PowerSaving firmware.
+// Overview, usage and version history: src/helpers/radiolib/RXPowerSaving.h
+
 #include "RXPowerSaving.h"
 #include <math.h>
 
