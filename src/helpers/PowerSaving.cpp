@@ -23,6 +23,12 @@ struct CpuClock {
 
 CpuClock requested_clock{};
 
+#if defined(HELTEC_LORA_V4_OLED)
+constexpr int companion_idle_mhz = 4;
+#else
+constexpr int companion_idle_mhz = 5;
+#endif
+
 int normalCpuClock(bool companion) {
 #if defined(ESP32_CPU_FREQ)
   return ESP32_CPU_FREQ;
@@ -59,6 +65,7 @@ void PowerSaving::applyCompanionPowerSaving(bool enabled) {
 
 void PowerSaving::updateCpuClock(bool enabled, bool companion) {
   const int normal_mhz = normalCpuClock(companion);
+  const int idle_mhz = companion ? companion_idle_mhz : 5;
   const CpuClock normal{normal_mhz, normal_mhz, false};
 #if ESP32_HW_USB_CDC && (defined(BLE_PIN_CODE) || defined(ENABLE_USB_INTERFACE))
   const bool light_sleep = companion;
@@ -74,12 +81,13 @@ void PowerSaving::updateCpuClock(bool enabled, bool companion) {
 #if defined(ENABLE_WIFI_INTERFACE)
     if (!usb_host && enabled && companion && wifi == WIFI_MODE_STA) {
       // The station driver holds the 80 MHz bus lock while its modem is awake.
-      clock = {5, 80, false};
+      const int station_idle_mhz = companion_idle_mhz < 5 && bleIsOn() ? 5 : idle_mhz;
+      clock = {station_idle_mhz, 80, false};
     }
 #endif
   } else if (enabled && bleIsOn()) {
     // The BLE controller requests an 80 MHz bus clock for radio events.
-    clock = {5, 80, light_sleep};
+    clock = {idle_mhz, 80, light_sleep};
   } else if (enabled) {
     clock = {5, companion ? 40 : 20, light_sleep};
   }
@@ -87,8 +95,11 @@ void PowerSaving::updateCpuClock(bool enabled, bool companion) {
   requested_clock = clock;
 
   auto result = configurePowerManagement(clock.max_mhz, clock.min_mhz, clock.light_sleep);
+  if (result == ESP_ERR_INVALID_ARG && clock.min_mhz < 5) {
+    result = configurePowerManagement(clock.max_mhz, 5, clock.light_sleep);
+  }
   // The original ESP32 needs at least 10 MHz for its 1 MHz REF_TICK.
-  if (result == ESP_ERR_INVALID_ARG && clock.min_mhz == 5) {
+  if (result == ESP_ERR_INVALID_ARG && clock.min_mhz <= 5) {
     result = configurePowerManagement(clock.max_mhz, 10, clock.light_sleep);
   }
   if (result != ESP_OK && result != ESP_ERR_NOT_SUPPORTED && !(clock == normal)) {
