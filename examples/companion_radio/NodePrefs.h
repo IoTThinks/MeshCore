@@ -43,6 +43,7 @@ public:
 
   uint8_t radio_fem_rxgain = 0; // external LoRa FEM RX gain (LNA)
   uint8_t radio_fem_txgain = 0; // external LoRa FEM TX gain (low by default)
+  uint8_t radio_fem_rxps = 1; // PowerSaving variant
   uint8_t _client_repeat = 0;  // DEPRECATED -> use repeat.disable_fwd
   uint8_t path_hash_mode = 0;    // which path mode to use when sending
   uint8_t autoadd_max_hops = 0;  // 0 = no limit, 1 = direct (0 hops), N = up to N-1 hops (max 64)
@@ -81,6 +82,7 @@ private:
       def("rxgain", _parent->rx_boosted_gain);
       def("fem_rxgain", _parent->radio_fem_rxgain);   // fem_rxgain WAS mapped to wrong JSON property previously
       def("fem_txgain", _parent->radio_fem_txgain);
+      def("fem_rxps", _parent->radio_fem_rxps);
       def("tx", _parent->tx_power_dbm);
       def("af", _parent->airtime_factor);
       def("rxdelay", _parent->rx_delay_base);
@@ -137,6 +139,8 @@ private:
     void setFEMRxGain(uint8_t g) override { _parent->radio_fem_rxgain = g; markDirty(); }
     uint8_t getFEMTxGain() const override { return _parent->radio_fem_txgain; }
     void setFEMTxGain(uint8_t g) override { _parent->radio_fem_txgain = g; markDirty(); }
+    uint8_t getFEMRxps() const override { return _parent->radio_fem_rxps; }
+    void setFEMRxps(uint8_t on) override { _parent->radio_fem_rxps = on; markDirty(); }
   };
   RadioPrefs radio;
 

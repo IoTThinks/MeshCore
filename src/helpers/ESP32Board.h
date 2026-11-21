@@ -113,7 +113,9 @@ public:
 #endif
 
     // MCU enters light sleep
+    onBeforeLightSleep();
     esp_light_sleep_start();
+    onAfterLightSleep();
 
     // Avoid ISR flood during wakeup due to HIGH LEVEL interrupt
     gpio_wakeup_disable(wakeupPin);
@@ -131,6 +133,9 @@ public:
     // Enable CPU interrupt servicing
     portEXIT_CRITICAL(&sleepMux);
   }
+
+  virtual void onBeforeLightSleep() { }
+  virtual void onAfterLightSleep() { }
 
   uint8_t getStartupReason() const override { return startup_reason; }
 
