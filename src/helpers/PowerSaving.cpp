@@ -63,9 +63,10 @@ void PowerSaving::updateCpuClock(bool enabled, bool companion) {
   if (wifiIsOn()) {
     const int wifi_mhz = normal_mhz < 80 ? 80 : normal_mhz;
     clock = {wifi_mhz, wifi_mhz, false};
-  } else if (enabled && (bleIsOn() || hasUsbPendingWork())) {
-    // BLE and native USB stay at 40 MHz while awake. The USB host lock still
-    // controls whether a companion may enter automatic light sleep.
+  } else if (enabled && bleIsOn()) {
+    // BLE can idle at 40 MHz and request an 80 MHz bus clock for radio events.
+    clock = {40, 80, light_sleep};
+  } else if (enabled && hasUsbPendingWork()) {
     clock = {40, 40, light_sleep};
   } else if (enabled) {
     clock = {5, companion ? 40 : 20, light_sleep};
@@ -74,7 +75,7 @@ void PowerSaving::updateCpuClock(bool enabled, bool companion) {
   requested_clock = clock;
 
   auto result = configurePowerManagement(clock.max_mhz, clock.min_mhz, clock.light_sleep);
-  // The classic ESP32 SDK rejects a 5 MHz floor because of REF_TICK.
+  // The original ESP32 needs at least 10 MHz for its 1 MHz REF_TICK.
   if (result == ESP_ERR_INVALID_ARG && clock.min_mhz == 5) {
     result = configurePowerManagement(clock.max_mhz, 10, clock.light_sleep);
   }
