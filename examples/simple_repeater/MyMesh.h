@@ -37,6 +37,12 @@
 #include <helpers/RoutingPolicy.h>
 #include "RateLimiter.h"
 
+// PowerSaving variant
+// Packet filter engine: -D PACKET_FILTER=1 to enable, -D PACKET_FILTER=0 (or undefined) to leave it out
+#if PACKET_FILTER
+  #include "ChannelFilter.h"
+#endif
+
 #ifdef WITH_BRIDGE
 extern AbstractBridge* bridge;
 #endif
@@ -110,6 +116,10 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
   uint8_t pending_sf;
   uint8_t pending_cr;
   int  matching_peer_indexes[MAX_CLIENTS];
+  // PowerSaving variant
+#if PACKET_FILTER
+  ChannelFilter _filter;   // packet filter rules (two profiles), persisted in /filter_rules.json
+#endif
 #if defined(WITH_RS232_BRIDGE)
   RS232Bridge bridge;
 #elif defined(WITH_ESPNOW_BRIDGE)
