@@ -42,6 +42,7 @@
 #if PACKET_FILTER
   #include "ChannelFilter.h"
 #endif
+#include "helpers/PowerSaving.h"
 
 #ifdef WITH_BRIDGE
 extern AbstractBridge* bridge;

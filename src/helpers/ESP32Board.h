@@ -71,8 +71,13 @@ public:
   virtual void powerOff() override;
   virtual void enterDeepSleep(uint32_t secs) override;
 
+  // PowerSaving variant
   uint32_t getIRQGpio() override {
+#ifdef P_LORA_DIO_1
     return P_LORA_DIO_1; // default for SX1262
+#else
+    return -1;
+#endif
   }
 
   void sleep(uint32_t secs) override {

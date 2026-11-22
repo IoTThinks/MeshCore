@@ -1592,7 +1592,9 @@ bool MyMesh::hasPendingWork() const {
 #if defined(ESP_PLATFORM) && ARDUINO_USB_CDC_ON_BOOT == 1 && ARDUINO_USB_MODE == 1
   if (isUsbConnected()) return true;
 #endif
-
+  // PowerSaving variant
+  // For boards using HW USB CDC, skip sleep if connected to PC via USB
+  if (PowerSaving::hasUsbPendingWork()) return true;
   // PowerSaving variant
   return _mgr->getOutboundTotal() > 0 || _mgr->getInboundTotal() > 0 ||  // rxdelay packets wait in the inbound queue
          isTransmitting() || _prefs.getRadioPrefs()->isRxPowerSavingCalibrationActive();
