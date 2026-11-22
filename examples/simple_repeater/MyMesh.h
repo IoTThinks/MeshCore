@@ -37,6 +37,9 @@
 #include <helpers/RoutingPolicy.h>
 #include "RateLimiter.h"
 
+// PowerSaving variant
+#include "helpers/PowerSaving.h"
+
 #ifdef WITH_BRIDGE
 extern AbstractBridge* bridge;
 #endif

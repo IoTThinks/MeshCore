@@ -53,9 +53,23 @@ public:
     }
 
     virtual void setNextWake() { _next_wake = millis() + _sleep_duration_secs * 1000UL; }
-    virtual unsigned long getNextWake() { return _next_wake; }
+    virtual unsigned long getNextWake() {
+      // Keep next wake within one sleep period from now
+      if ((long)(_next_wake - millis()) > (long)(_sleep_duration_secs * 1000UL)) {
+        setNextWake();
+      }
+
+      return _next_wake;
+    }
     virtual void setNextSleep() { _next_sleep = millis() + _wake_duration_secs * 1000UL; }
-    virtual unsigned long getNextSleep() { return _next_sleep; }
+    virtual unsigned long getNextSleep() {
+      // Keep next sleep within one wake period from now
+      if ((long)(_next_sleep - millis()) > (long)(_wake_duration_secs * 1000UL)) {
+        setNextSleep();
+      }
+
+      return _next_sleep; 
+    }
     virtual unsigned long getLastValidTimeSync() { return _last_valid_time_sync; }
     
     virtual long getLatitude() = 0;

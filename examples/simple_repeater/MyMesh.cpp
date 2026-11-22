@@ -1660,6 +1660,11 @@ bool MyMesh::hasPendingWork() const {
 #if defined(WITH_BRIDGE)
   if (bridge.isRunning()) return true;  // bridge needs WiFi radio, can't sleep
 #endif
+
+  // PowerSaving variant
+  // For boards using HW USB CDC, skip sleep if connected to PC via USB
+  if (PowerSaving::hasUsbPendingWork()) return true;
+
   // PowerSaving variant
   return _mgr->getOutboundTotal() > 0 || _mgr->getInboundTotal() > 0 ||  // rxdelay packets wait in the inbound queue
          isTransmitting() || _prefs.getRadioPrefs()->isRxPowerSavingCalibrationActive();

@@ -278,6 +278,16 @@ void setup() {
 #endif
 
   the_mesh.startInterface(interface_manager);
+
+#if ENV_INCLUDE_GPS == 1
+  // Apply PowerSaving profile for GPS
+  if (sensors.getLocationProvider() != NULL) {
+    // GPS on and off duration in seconds
+    sensors.getLocationProvider()->setPowerSavingProfile(the_mesh.getNodePrefs()->powersaving_enabled, 600,
+                                                         1800); // Max 10 minutes, 30 minutes
+  }
+#endif
+
   sensors.begin();
 
 #if ENV_INCLUDE_GPS == 1
@@ -331,6 +341,9 @@ void loop() {
     applied_powersaving = the_mesh.getNodePrefs()->powersaving_enabled;
     PowerSaving::applyCompanionPowerSaving(applied_powersaving);
   }
+
+  // no auto light sleep while connected to USB host
+  PowerSaving::updateUsbPowerLocks();
 #endif
 
 #ifdef ENABLE_WIFI_INTERFACE

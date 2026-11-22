@@ -136,6 +136,20 @@ static Adafruit_INA260 INA260;
 static INA226 INA226(TELEM_INA226_ADDRESS, TELEM_WIRE);
 #endif
 
+#if ENV_INCLUDE_INA228
+#ifndef TELEM_INA228_ADDRESS
+#define TELEM_INA228_ADDRESS    0x45      // INA228 single channel current sensor I2C address
+#endif
+#ifndef TELEM_INA228_SHUNT_VALUE
+#define TELEM_INA228_SHUNT_VALUE  0.015   // shunt resistor in ohm
+#endif
+#ifndef TELEM_INA228_MAX_AMP
+#define TELEM_INA228_MAX_AMP      10.0    // expected max current in A
+#endif
+#include <INA228.h>
+static INA228 INA228(TELEM_INA228_ADDRESS, TELEM_WIRE);
+#endif
+
 #if ENV_INCLUDE_MLX90614
 #ifndef TELEM_MLX90614_ADDRESS
 #define TELEM_MLX90614_ADDRESS 0x5A      // MLX90614 IR temperature sensor I2C address
@@ -428,6 +442,21 @@ static void query_ina226(uint8_t ch, uint8_t, CayenneLPP& lpp) {
 }
 #endif
 
+#if ENV_INCLUDE_INA228
+static uint8_t init_ina228(TwoWire* wire, uint8_t addr) {
+  // INA228 static instance was constructed with the address; begin() uses it.
+  if(!INA228.begin()) return 0;
+  INA228.setMaxCurrentShunt(TELEM_INA228_MAX_AMP, TELEM_INA228_SHUNT_VALUE);
+  return 1;
+}
+static void query_ina228(uint8_t ch, uint8_t, CayenneLPP& lpp) {
+  lpp.addVoltage(ch, INA228.getBusVoltage());
+  lpp.addCurrent(ch, INA228.getAmpere());
+  lpp.addPower(ch, INA228.getWatt());
+  lpp.addEnergy(ch, INA228.getWattHour());  // unit sent as Wh, telemetry shown in kWh
+}
+#endif
+
 #if ENV_INCLUDE_MLX90614
 static uint8_t init_mlx90614(TwoWire* wire, uint8_t addr) {
   return MLX90614.begin(addr, wire) ? 2 : 0;  // 2 channels: object temp, ambient temp
@@ -612,6 +641,9 @@ static const SensorDef SENSOR_TABLE[] = {
 #endif
 #if ENV_INCLUDE_INA226
   { TELEM_INA226_ADDRESS,  "INA226",       init_ina226,   query_ina226   },
+#endif
+#if ENV_INCLUDE_INA228
+  { TELEM_INA228_ADDRESS,  "INA228",       init_ina228,   query_ina228   },
 #endif
 #if ENV_INCLUDE_MLX90614
   { TELEM_MLX90614_ADDRESS,"MLX90614",     init_mlx90614, query_mlx90614 },
@@ -883,9 +915,17 @@ bool EnvironmentSensorManager::gpsIsAwake(uint8_t ioPin){
 
     _location = &RAK12500_provider;
     return true;
-  } else if (Serial1.available()) { // RAK12501 (L76K) on UART
+  } else if (Serial1.available()) {
     MESH_DEBUG_PRINTLN("Serial GPS init correctly and is turned on");
-    gpsResetPin = ioPin;  // WB_IO2
+#ifdef PIN_GPS_EN
+    if(PIN_GPS_EN){
+      gpsResetPin = PIN_GPS_EN;
+    } else {
+      gpsResetPin = ioPin; // WB_IO2
+    }
+#else
+    gpsResetPin = ioPin; // WB_IO2
+#endif
     serialGPSFlag = true;
     gps_active = true;
     gps_detected = true;
