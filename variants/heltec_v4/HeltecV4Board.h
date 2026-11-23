@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <helpers/RefCountedDigitalPin.h>
 #include <helpers/ESP32Board.h>
+#include <helpers/FemRxpsGate.h>
 #include "LoRaFEMControl.h"
 
 #ifndef ADC_MULTIPLIER
@@ -11,17 +12,10 @@
 
 class HeltecV4Board : public ESP32Board {
   KeyValueStore* _prefs = NULL;
+  FemRxpsGate fem_rxps_gate{P_LORA_BUSY, P_LORA_KCT8103L_PA_CTX};
 
   bool setLoRaFemLnaEnabled(bool enable);
   bool isLoRaFemLnaEnabled() const;
-
-  // PowerSaving variant
-  bool fem_rxps = true;
-  bool fem_rxps_active = false;
-  uint32_t fem_rxps_sleeps = 0;
-  const char* femRxpsInactive();
-  void femRxpsBoot();
-  void femRxpsRelease();
 
 protected:
   float adc_mult = ADC_MULTIPLIER;

@@ -3,10 +3,12 @@
 #include <Arduino.h>
 #include <helpers/RefCountedDigitalPin.h>
 #include <helpers/ESP32Board.h>
+#include <helpers/FemRxpsGate.h>
 #include "LoRaFEMControl.h"
 
 class HeltecTrackerV2Board : public ESP32Board {
   KeyValueStore* _prefs = NULL;
+  FemRxpsGate fem_rxps_gate{P_LORA_BUSY, P_LORA_KCT8103L_PA_CTX};
 
   bool setLoRaFemLnaEnabled(bool enable);
   bool isLoRaFemLnaEnabled() const;
@@ -21,6 +23,8 @@ public:
   void attachDynamicPrefs(KeyValueStore* prefs);
   bool handleCommand(const char* command, uint32_t sender_timestamp, char* reply) override;
 
+  void onBeforeLightSleep() override;
+  void onAfterLightSleep() override;
   void onBeforeTransmit(void) override;
   void onAfterTransmit(void) override;
   void shutdownPeripherals() override;
