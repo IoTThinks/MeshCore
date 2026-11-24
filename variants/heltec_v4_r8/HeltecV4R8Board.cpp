@@ -6,6 +6,7 @@ void HeltecV4R8Board::begin() {
   periph_power.begin();
   periph_power.claim();  // R8 VEXT also feeds the LoRa antenna boost rail.
 
+  fem_rxps_gate.begin();
   loRaFEMControl.init();
 
 #ifdef PIN_TOUCH_RST
@@ -32,6 +33,14 @@ void HeltecV4R8Board::begin() {
 void HeltecV4R8Board::onBeforeTransmit(void) {
   digitalWrite(P_LORA_TX_LED, HIGH);
   loRaFEMControl.setTxModeEnable();
+}
+
+void HeltecV4R8Board::onBeforeLightSleep() {
+  fem_rxps_gate.beforeSleep(loRaFEMControl.isLnaCanControl(), isLoRaFemLnaEnabled());
+}
+
+void HeltecV4R8Board::onAfterLightSleep() {
+  fem_rxps_gate.afterSleep();
 }
 
 void HeltecV4R8Board::onAfterTransmit(void) {
@@ -86,9 +95,13 @@ void HeltecV4R8Board::attachDynamicPrefs(KeyValueStore* prefs) {
   _prefs->getByKey("fem_rxgain", radio_fem_rxgain, 7);  // get initial values
 
   setLoRaFemLnaEnabled(strcmp(radio_fem_rxgain, "1") == 0);
+  fem_rxps_gate.attachPrefs(prefs);
 }
 
 bool HeltecV4R8Board::handleCommand(const char* command, uint32_t sender_timestamp, char* reply) {
+  if (fem_rxps_gate.handleCommand(command, reply, loRaFEMControl.isLnaCanControl(), isLoRaFemLnaEnabled())) {
+    return true;
+  }
   if (strcmp(command, "get radio.fem.rxgain") == 0) {
     if (!loRaFEMControl.isLnaCanControl()) {
       strcpy(reply, "Error: unsupported");
