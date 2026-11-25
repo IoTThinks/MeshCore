@@ -44,6 +44,7 @@ static const Module::RfSwitchMode_t rfswitch_table[] = {
 };
 #endif
 
+// PowerSaving variant
 // Charge status LED logic (active low charger signals):
 //
 // EXT_PWR_DETECT | EXT_CHRG_DONE | EXT_CHRG_DETECT | State          | LED_RED
@@ -220,6 +221,7 @@ void T1000SensorManager::loop() {
     _nmea->loop();
   }
 
+  // PowerSaving variant
   chargeLedTick(); // every loop() iteration for smooth breathing animation
 
   if ((int32_t)(millis() - next_gps_update) >= 0) {

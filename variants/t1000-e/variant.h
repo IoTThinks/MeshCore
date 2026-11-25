@@ -25,9 +25,9 @@
 #define BATTERY_IMMUTABLE
 #define ADC_MULTIPLIER          (2.0F)
 
-#define EXT_CHRG_DETECT         (35)            // P1.3, LOW while charging
-#define EXT_CHRG_DONE           (36)            // P1.4, LOW when charge complete
-#define EXT_PWR_DETECT          (5)             // P0.5, HIGH when external power present
+#define EXT_CHRG_DETECT         (35)            // P1.3, LOW while charging // PowerSaving variant
+#define EXT_CHRG_DONE           (36)            // P1.4, LOW when charge complete  // PowerSaving variant
+#define EXT_PWR_DETECT          (5)             // P0.5, HIGH when external power present // PowerSaving variant
 
 #define ADC_RESOLUTION          (14)
 #define BATTERY_SENSE_RES       (12)
@@ -79,7 +79,7 @@
 #define LED_BUILTIN             (-1)
 #define LED_BLUE                (-1)            // No blue led
 #define LED_GREEN               (24)            // P0.24
-#define LED_RED                 (3)             // P0.03, charge status LED
+#define LED_RED                 (3)             // P0.03, charge status LED // PowerSaving variant
 #define LED_PIN                 LED_GREEN
 
 #define LED_STATE_ON            HIGH
