@@ -521,6 +521,14 @@ void ST7735Display::turnOn() {
     pinMode(PIN_TFT_SCL, OUTPUT);
     pinMode(PIN_TFT_RST, OUTPUT);
     pinMode(PIN_TFT_LEDA_CTL, OUTPUT);
+#elif defined(HELTEC_TRACKER_V2)
+    // Restore the TFT pins and their ESP32-S3 SPI routing before the panel reset.
+    pinMode(PIN_TFT_CS, OUTPUT);
+    pinMode(PIN_TFT_DC, OUTPUT);
+    pinMode(PIN_TFT_RST, OUTPUT);
+    pinMode(PIN_TFT_LEDA_CTL, OUTPUT);
+    spiAttachSCK(_spi->bus(), PIN_TFT_SCL);
+    spiAttachMOSI(_spi->bus(), PIN_TFT_SDA);
 #endif
 
     _resetAndInit();
@@ -546,6 +554,14 @@ void ST7735Display::turnOff() {
     pinMode(PIN_TFT_DC, INPUT);
     pinMode(PIN_TFT_SDA, INPUT);
     pinMode(PIN_TFT_SCL, INPUT);
+    pinMode(PIN_TFT_RST, INPUT);
+    pinMode(PIN_TFT_LEDA_CTL, INPUT);
+#elif defined(HELTEC_TRACKER_V2)
+    // Leave all TFT signals high-impedance before releasing the peripheral supply.
+    pinMode(PIN_TFT_CS, INPUT);
+    pinMode(PIN_TFT_DC, INPUT);
+    spiDetachSCK(_spi->bus(), PIN_TFT_SCL);
+    spiDetachMOSI(_spi->bus(), PIN_TFT_SDA);
     pinMode(PIN_TFT_RST, INPUT);
     pinMode(PIN_TFT_LEDA_CTL, INPUT);
 #endif
