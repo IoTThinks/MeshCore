@@ -25,8 +25,9 @@
 #define BATTERY_IMMUTABLE
 #define ADC_MULTIPLIER          (2.0F)
 
-#define EXT_CHRG_DETECT         (35)            // P1.3
-#define EXT_PWR_DETECT          (5)             // P0.5
+#define EXT_CHRG_DETECT         (35)            // P1.3, LOW while charging
+#define EXT_CHRG_DONE           (36)            // P1.4, LOW when charge complete
+#define EXT_PWR_DETECT          (5)             // P0.5, HIGH when external power present
 
 #define ADC_RESOLUTION          (14)
 #define BATTERY_SENSE_RES       (12)
@@ -78,6 +79,7 @@
 #define LED_BUILTIN             (-1)
 #define LED_BLUE                (-1)            // No blue led
 #define LED_GREEN               (24)            // P0.24
+#define LED_RED                 (3)             // P0.03, charge status LED
 #define LED_PIN                 LED_GREEN
 
 #define LED_STATE_ON            HIGH
@@ -98,7 +100,7 @@
 #define LORA_SCLK               (PIN_SPI_SCK)   // P0.11
 #define LORA_MISO               (PIN_SPI_MISO)  // P1.8
 #define LORA_MOSI               (PIN_SPI_MOSI)  // P1.9
- 
+
 #define LR11X0_DIO_AS_RF_SWITCH    true
 #define LR11X0_DIO3_TCXO_VOLTAGE   1.6
 

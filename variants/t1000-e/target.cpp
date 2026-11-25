@@ -27,26 +27,78 @@ static const uint32_t rfswitch_dios[Module::RFSWITCH_MAX_PINS] = {
   RADIOLIB_LR11X0_DIO5,
   RADIOLIB_LR11X0_DIO6,
   RADIOLIB_LR11X0_DIO7,
-  RADIOLIB_LR11X0_DIO8, 
+  RADIOLIB_LR11X0_DIO8,
   RADIOLIB_NC
 };
 
 static const Module::RfSwitchMode_t rfswitch_table[] = {
   // mode                 DIO5  DIO6  DIO7  DIO8
-  { LR11x0::MODE_STBY,   {LOW,  LOW,  LOW,  LOW  }},  
+  { LR11x0::MODE_STBY,   {LOW,  LOW,  LOW,  LOW  }},
   { LR11x0::MODE_RX,     {HIGH, LOW,  LOW,  HIGH }},
   { LR11x0::MODE_TX,     {HIGH, HIGH, LOW,  HIGH }},
   { LR11x0::MODE_TX_HP,  {LOW,  HIGH, LOW,  HIGH }},
-  { LR11x0::MODE_TX_HF,  {LOW,  LOW,  LOW,  LOW  }}, 
+  { LR11x0::MODE_TX_HF,  {LOW,  LOW,  LOW,  LOW  }},
   { LR11x0::MODE_GNSS,   {LOW,  LOW,  HIGH, LOW  }},
-  { LR11x0::MODE_WIFI,   {LOW,  LOW,  LOW,  LOW  }},  
+  { LR11x0::MODE_WIFI,   {LOW,  LOW,  LOW,  LOW  }},
   END_OF_MODE_TABLE,
 };
 #endif
 
+// Charge status LED logic (active low charger signals):
+//
+// EXT_PWR_DETECT | EXT_CHRG_DONE | EXT_CHRG_DETECT | State          | LED_RED
+// ---------------+---------------+-----------------+----------------+-----------
+// 0              | -             | -               | No power       | Off
+// 1              | 0             | -               | Charge done    | Solid
+// 1              | 1             | 0               | Charging       | Breathing
+// 1              | 1             | 1               | Fault/unknown  | Fast blink
+static void chargeLedTick() {
+  static uint32_t lastPoll = 0;
+  static uint32_t lastBlink = 0;
+  static bool blinkOn = false;
+  static uint8_t ledState = 0; // 0=off, 1=solid, 2=breathing, 3=fault
+
+  // Charger status doesn't change faster than this
+  if (millis() - lastPoll >= 500) {
+    lastPoll = millis();
+
+    if (!digitalRead(EXT_PWR_DETECT)) {
+      ledState = 0;
+      analogWrite(LED_RED, 0);
+    } else if (digitalRead(EXT_CHRG_DONE) == LOW) {
+      ledState = 1;
+      analogWrite(LED_RED, 255);
+    } else if (digitalRead(EXT_CHRG_DETECT) == LOW) {
+      ledState = 2;
+    } else {
+      ledState = 3;
+    }
+  }
+
+  // Breathing: triangle wave, 2 s period, updated every tick for smoothness
+  if (ledState == 2) {
+    const uint32_t PERIOD_MS = 2000;
+    const uint8_t BRIGHT_MIN = 4;
+    const uint8_t BRIGHT_MAX = 255;
+    uint32_t phase = millis() % PERIOD_MS;
+    uint32_t half = PERIOD_MS / 2;
+    uint8_t level = (phase < half)
+                        ? (uint8_t)((phase * (BRIGHT_MAX - BRIGHT_MIN)) / half + BRIGHT_MIN)
+                        : (uint8_t)(((PERIOD_MS - phase) * (BRIGHT_MAX - BRIGHT_MIN)) / half + BRIGHT_MIN);
+    analogWrite(LED_RED, level);
+  }
+
+  // Fault: fast blink, 200 ms on/off
+  if (ledState == 3 && millis() - lastBlink >= 200) {
+    lastBlink = millis();
+    blinkOn = !blinkOn;
+    analogWrite(LED_RED, blinkOn ? 255 : 0);
+  }
+}
+
 bool radio_init() {
   //rtc_clock.begin(Wire);
-  
+
 #ifdef LR11X0_DIO3_TCXO_VOLTAGE
   float tcxo = LR11X0_DIO3_TCXO_VOLTAGE;
 #else
@@ -61,7 +113,7 @@ bool radio_init() {
     Serial.println(status);
     return false;  // fail
   }
-  
+
   radio.setCRC(2);
   radio.explicitHeader();
 
@@ -167,6 +219,8 @@ void T1000SensorManager::loop() {
   if ((!_nmea->isPowerSavingEnabled() && gps_active) || (_nmea->isPowerSavingEnabled() && gps_wake)) {
     _nmea->loop();
   }
+
+  chargeLedTick(); // every loop() iteration for smooth breathing animation
 
   if ((int32_t)(millis() - next_gps_update) >= 0) {
     if ((!_nmea->isPowerSavingEnabled() && gps_active) || (_nmea->isPowerSavingEnabled() && gps_wake)) {
