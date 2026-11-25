@@ -76,6 +76,9 @@ public:
   uint8_t loop_detect = 0;
   uint8_t cad_enabled = 0;      // hardware Channel Activity Detection before TX (boolean)
   uint8_t extra_sf[4];
+  // Battery-controlled forwarding (repeater). 0 = disabled
+  uint16_t batt_fwd_suspend_mv = 0;  // suspend forwarding when battery drops below this
+  uint16_t batt_fwd_resume_mv = 0;   // resume forwarding when battery reaches this again
 
 private:
   class RadioPrefs : public CommonRadioPrefs {
@@ -200,6 +203,8 @@ private:
       def("f_max_uns", _parent->flood_max_unscoped);
       def("f_max_adv", _parent->flood_max_advert);
       def("loop", _parent->loop_detect);
+      def("batt_susp", _parent->batt_fwd_suspend_mv);
+      def("batt_res", _parent->batt_fwd_resume_mv);
     }
   public:
     RepeatPrefs(NodePrefs* parent) : _parent(parent) { }

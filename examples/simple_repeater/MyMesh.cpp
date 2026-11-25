@@ -205,7 +205,7 @@ uint8_t MyMesh::handleAnonClockReq(const mesh::Identity& sender, uint32_t sender
 #elif WITH_ESPNOW_BRIDGE
     reply_data[8] |= 0x03;  // is bridge, type ESP-NOW
 #endif
-    if (_prefs.disable_fwd) {   // is this repeater currently disabled
+    if (isForwardDisabled()) {   // is this repeater currently disabled (manually or by low battery)
       reply_data[8] |= 0x80;  // is disabled
     }
     // TODO:  add some kind of moving-window utilisation metric, so can query 'how busy' is this repeater
@@ -444,6 +444,7 @@ bool MyMesh::sendFloodReply(mesh::Packet* packet, unsigned long delay_millis, ui
 
 bool MyMesh::allowPacketForward(const mesh::Packet *packet) {
   if (_prefs.disable_fwd) return false;
+  if (batt_fwd_suspended) return false;   // suspended due to low battery
   if (packet->isRouteFlood()
       && mesh::isFloodHopLimitExceeded(packet, _prefs.flood_max, _prefs.flood_max_unscoped, _prefs.flood_max_advert)) {
     return false;
@@ -819,7 +820,7 @@ bool MyMesh::onPeerPathRecv(mesh::Packet *packet, int sender_idx, const uint8_t 
 void MyMesh::onControlDataRecv(mesh::Packet* packet) {
   uint8_t type = packet->payload[0] & 0xF0;    // just test upper 4 bits
   if (type == CTL_TYPE_NODE_DISCOVER_REQ && packet->payload_len >= 6
-      && !_prefs.disable_fwd && discover_limiter.allow(rtc_clock.getCurrentTime())
+      && !isForwardDisabled() && discover_limiter.allow(rtc_clock.getCurrentTime())
       && !isHiddenNode()   // this node wishes to NOT be discoverable
   ) {
     int i = 1;
@@ -909,6 +910,9 @@ MyMesh::MyMesh(mesh::MainBoard &board, mesh::Radio &radio, mesh::MillisecondCloc
   next_local_advert = next_flood_advert = 0;
   dirty_contacts_expiry = 0;
   set_radio_at = revert_radio_at = 0;
+  batt_fwd_suspended = false;
+  batt_fwd_count = 0;
+  next_batt_check = 0;
   _logging = false;
   region_load_active = false;
   recv_pkt_region = NULL;
@@ -1480,6 +1484,8 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, ClientInfo* sender, char *
         }
       }
     }
+  } else if (memcmp(command, "battery", 7) == 0 && (command[7] == 0 || command[7] == ' ')) {
+    handleBatteryCmd(&command[7], reply);
   } else if (memcmp(command, "discover.neighbors", 18) == 0) {
     const char* sub = command + 18;
     while (*sub == ' ') sub++;
@@ -1492,6 +1498,107 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, ClientInfo* sender, char *
   } else{
     _cli.handleCommand(sender_timestamp, command, reply);  // common CLI commands
   }
+}
+
+#ifndef BATT_FWD_CHECK_INTERVAL_MS
+  #define BATT_FWD_CHECK_INTERVAL_MS  30000   // how often battery is sampled
+#endif
+#ifndef BATT_FWD_CONFIRM_COUNT
+  #define BATT_FWD_CONFIRM_COUNT      3       // consecutive readings needed before switching state
+#endif
+#define BATT_FWD_MIN_MV   1000
+#define BATT_FWD_MAX_MV   30000
+
+void MyMesh::checkBattForwarding() {
+  if (!isBattFwdEnabled()) {
+    batt_fwd_suspended = false;
+    batt_fwd_count = 0;
+    return;
+  }
+
+  uint16_t mv = board.getBattMilliVolts();
+  if (mv == 0) {   // no valid reading (board can't measure) - never suspend on that
+    batt_fwd_count = 0;
+    return;
+  }
+
+  // Hysteresis: suspend below suspend_mv, resume at/above resume_mv.
+  // Require several consecutive readings so TX voltage sag / ADC noise doesn't toggle the state.
+  bool want_change = batt_fwd_suspended ? (mv >= _prefs.batt_fwd_resume_mv)
+                                        : (mv <  _prefs.batt_fwd_suspend_mv);
+  if (!want_change) {
+    batt_fwd_count = 0;
+    return;
+  }
+  if (++batt_fwd_count < BATT_FWD_CONFIRM_COUNT) return;
+
+  batt_fwd_count = 0;
+  batt_fwd_suspended = !batt_fwd_suspended;
+  MESH_DEBUG_PRINTLN("Battery %u mV: forwarding %s", (unsigned)mv, batt_fwd_suspended ? "SUSPENDED" : "RESUMED");
+}
+
+void MyMesh::handleBatteryCmd(const char* args, char* reply) {
+  while (*args == ' ') args++;
+
+  if (*args == 0) {   // 'battery' -> status
+    uint16_t mv = board.getBattMilliVolts();
+    if (!isBattFwdEnabled()) {
+      sprintf(reply, "batt:%u mV, fwd control: off", (unsigned)mv);
+    } else {
+      sprintf(reply, "batt:%u mV, fwd:%s (suspend <%u, resume >=%u mV)%s",
+              (unsigned)mv,
+              batt_fwd_suspended ? "SUSPENDED" : "on",
+              (unsigned)_prefs.batt_fwd_suspend_mv,
+              (unsigned)_prefs.batt_fwd_resume_mv,
+              _prefs.disable_fwd ? ", repeat off" : "");
+    }
+    return;
+  }
+
+  if (strcmp(args, "off") == 0) {
+    _prefs.batt_fwd_suspend_mv = 0;
+    _prefs.batt_fwd_resume_mv = 0;
+    batt_fwd_suspended = false;
+    batt_fwd_count = 0;
+    savePrefs();
+    strcpy(reply, "OK - battery fwd control off");
+    return;
+  }
+
+  // 'battery <suspend-mV> <resume-mV>'
+  char* ep;
+  long susp = strtol(args, &ep, 10);
+  bool ok = ep != args && *ep == ' ';
+  const char* sp = ep;
+  long res = ok ? strtol(sp, &ep, 10) : 0;
+  ok = ok && ep != sp;
+  while (ok && *ep == ' ') ep++;
+  if (!ok || *ep != 0) {
+    strcpy(reply, "Err - usage: battery [off | <suspend-mV> <resume-mV>]");
+    return;
+  }
+  if (susp < BATT_FWD_MIN_MV || res > BATT_FWD_MAX_MV) {
+    sprintf(reply, "Err - range %d-%d mV", BATT_FWD_MIN_MV, BATT_FWD_MAX_MV);
+    return;
+  }
+  if (res <= susp) {
+    strcpy(reply, "Err - resume-mV must be > suspend-mV");
+    return;
+  }
+
+  _prefs.batt_fwd_suspend_mv = (uint16_t)susp;
+  _prefs.batt_fwd_resume_mv  = (uint16_t)res;
+  savePrefs();
+
+  // Apply immediately based on current reading (user-initiated, no debounce)
+  uint16_t mv = board.getBattMilliVolts();
+  batt_fwd_count = 0;
+  batt_fwd_suspended = (mv > 0 && mv < _prefs.batt_fwd_suspend_mv);
+  next_batt_check = futureMillis(BATT_FWD_CHECK_INTERVAL_MS);
+
+  sprintf(reply, "OK - suspend <%u, resume >=%u mV (now %u mV, fwd:%s)",
+          (unsigned)_prefs.batt_fwd_suspend_mv, (unsigned)_prefs.batt_fwd_resume_mv,
+          (unsigned)mv, batt_fwd_suspended ? "SUSPENDED" : "on");
 }
 
 void MyMesh::loop() {
@@ -1529,6 +1636,11 @@ void MyMesh::loop() {
     // PowerSaving variant
     _prefs.getRadioPrefs()->applyRxPowerSaving(_prefs.sf, _prefs.bw);
     MESH_DEBUG_PRINTLN("Radio params restored");
+  }
+
+  if (millisHasNowPassed(next_batt_check)) {
+    next_batt_check = futureMillis(BATT_FWD_CHECK_INTERVAL_MS);
+    checkBattForwarding();
   }
 
   // is pending dirty contacts write needed?
