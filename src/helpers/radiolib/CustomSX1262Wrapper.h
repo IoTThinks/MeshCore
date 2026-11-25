@@ -75,19 +75,31 @@ protected:
     const uint32_t transition_us = rxPowerSavingTransitionUs();
     // Less than one 15.625 us tick of programmed sleep.
     if (_rx_ps_sleep_us < transition_us + 16) return RADIOLIB_ERR_INVALID_SLEEP_PERIOD;
+    // L1-L9 round R down, by at most 63 ticks: L1-L8 size it only for the
+    // datasheet's 2*R+S, which the reload covers by seconds, and L9 keeps at
+    // least 7.8 of its 8 symbols. L10's window is the measured working edge and
+    // a manual window is what was asked for, so both round up.
+    const bool round_down = _rx_ps_level >= 1 && _rx_ps_level <= RX_POWERSAVING_OVERDRIVE_LEVEL;
     if (!adjustSX1262RxPowerSavingPeriod(_rx_ps_rx_us, _rx_ps_sleep_us,
-          radio->spreadingFactor, radio->bandwidthKhz, transition_us, eff_rx_us)) {
+          radio->spreadingFactor, radio->bandwidthKhz, transition_us, eff_rx_us,
+          round_down)) {
       return RADIOLIB_ERR_INVALID_RX_PERIOD;
     }
     *eff_sleep_us = _rx_ps_sleep_us;
-    return radio->startReceiveDutyCycle(*eff_rx_us, *eff_sleep_us, irq_flags, irq_mask);
+    const uint8_t symbol_timeout = sx1262RxPowerSavingSymbolTimeout(
+        *eff_rx_us, radio->spreadingFactor, radio->bandwidthKhz);
+    return radio->startReceiveDutyCycle(*eff_rx_us, *eff_sleep_us, irq_flags, irq_mask,
+                                        symbol_timeout);
   }
 
   // PowerSaving variant
   int16_t stopDutyCycleHardware() override {
     int16_t standby_err = _radio->standby();
     int16_t rtc_err = ((CustomSX1262 *)_radio)->stopRTC();
-    return standby_err != RADIOLIB_ERR_NONE ? standby_err : rtc_err;
+    // Continuous RX must not keep the duty-cycle symbol timeout.
+    int16_t timeout_err = ((CustomSX1262 *)_radio)->setRxSymbolTimeout(0);
+    if (standby_err != RADIOLIB_ERR_NONE) return standby_err;
+    return rtc_err != RADIOLIB_ERR_NONE ? rtc_err : timeout_err;
   }
 
 public:

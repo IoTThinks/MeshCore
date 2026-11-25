@@ -83,6 +83,68 @@ TEST(SX1262RxPowerSaving, HandlesAllResiduesAndRegisterBoundaries) {
   }
 }
 
+TEST(SX1262RxPowerSaving, RoundsDownToTheRemainderAtOrBelow) {
+  for (uint32_t base : {64U, 3200U, 65472U, 65536U, 131008U, 131072U, 0xFFFF80U}) {
+    for (uint32_t offset = 1; offset <= 64; ++offset) {
+      const uint32_t r = base + offset;
+      uint32_t effective = 0;
+      ASSERT_TRUE(adjustSX1262RxPowerSavingPeriod(toUs(r), toUs(1354) + 2600,
+                                                 8, 62.5f, 2600, &effective, true));
+      const uint32_t chosen = toTicks(effective);
+      EXPECT_LE(chosen, r);
+      EXPECT_LE(r - chosen, 63U);
+      EXPECT_EQ(chosen % 64, 1U);
+      EXPECT_GE(observedTimer(chosen, 1354), requiredTicks(8, 62.5f));
+      EXPECT_EQ(effective, toUs(chosen));
+    }
+  }
+  // At 64 ticks the remainder below would be a one-tick window.
+  uint32_t effective = 0;
+  ASSERT_TRUE(adjustSX1262RxPowerSavingPeriod(toUs(64), toUs(1354) + 2600,
+                                             8, 62.5f, 2600, &effective, true));
+  EXPECT_EQ(toTicks(effective), 65U);
+}
+
+TEST(SX1262RxPowerSaving, RoundsLevelWindowsDownAcrossTheProfileGrid) {
+  uint32_t valid = 0;
+  for (float bw : {7.8f, 10.4f, 15.6f, 20.8f, 31.25f, 41.7f,
+                   62.5f, 125.0f, 250.0f, 500.0f}) {
+    for (uint8_t sf = 5; sf <= 12; ++sf) {
+      for (uint8_t p : {16, 32}) {
+        for (uint8_t level = 1; level <= RX_POWERSAVING_OVERDRIVE_LEVEL; ++level) {
+          uint32_t rx, sleep, effective;
+          if (!recalcRxPowerSavingFromLevel(level, sf, bw, p, &rx, &sleep,
+                                           RX_POWERSAVING_CAPTURE_COST_SYMBOLS, 2600)) continue;
+          ASSERT_TRUE(adjustSX1262RxPowerSavingPeriod(rx, sleep, sf, bw, 2600, &effective, true));
+          const uint32_t s = toTicks(sleep - 2600);
+          uint32_t expected = (toTicks(rx) - 1) / 64 * 64 + 1;
+          while (expected % 64 <= 62 && observedTimer(expected, s) < requiredTicks(sf, bw)) ++expected;
+          ASSERT_LE(expected % 64, 62U);
+          EXPECT_EQ(effective, toUs(expected));
+          // L1-L8 keep more than 10.7 symbols, L9 at least 7.8 of its 8.
+          const double symbols = toTicks(effective) * 15.625 * bw / (1000.0 * (1U << sf));
+          EXPECT_GE(symbols, level == RX_POWERSAVING_OVERDRIVE_LEVEL ? 7.8 : 10.7);
+          valid++;
+        }
+      }
+    }
+  }
+  EXPECT_EQ(valid, 1377U);
+
+  // SF8/BW62.5 with the P32 profile.
+  const struct { uint8_t level; uint32_t rx, effective; } cases[] = {
+    {6, 49344, 49016}, {9, 32782, 32016},
+  };
+  for (auto c : cases) {
+    uint32_t rx, sleep, effective;
+    ASSERT_TRUE(recalcRxPowerSavingFromLevel(c.level, 8, 62.5f, 32, &rx, &sleep,
+                                             RX_POWERSAVING_CAPTURE_COST_SYMBOLS, 2600));
+    EXPECT_EQ(rx, c.rx);
+    ASSERT_TRUE(adjustSX1262RxPowerSavingPeriod(rx, sleep, 8, 62.5f, 2600, &effective, true));
+    EXPECT_EQ(effective, c.effective);
+  }
+}
+
 TEST(SX1262RxPowerSaving, EvaluatesReloadAfter24BitWrap) {
   uint32_t effective = 0;
   // R=1 reloads to four ticks after wrapping; R=2 leaves 262150 ticks.
@@ -167,4 +229,47 @@ TEST(SX1262RxPowerSaving, CoversNarrowBandwidthsAndManualPeriodLimits) {
       }
     }
   }
+}
+
+TEST(SX1262RxPowerSaving, EncodesTheSymbolTimeoutLikeLoRaMacNode) {
+  const struct { unsigned symbols, count, reg; } cases[] = {
+    {0, 0, 0x00}, {8, 8, 0x20}, {62, 62, 0xF8}, {63, 64, 0x41},
+    {96, 96, 0x61}, {248, 248, 0xF9}, {255, 248, 0xF9},
+  };
+  for (auto c : cases) {
+    SCOPED_TRACE(c.symbols);
+    const SX1262SymbolTimeout timeout = sx1262SymbolTimeout(c.symbols);
+    EXPECT_EQ(unsigned(timeout.count), c.count);
+    EXPECT_EQ(unsigned(timeout.reg), c.reg);
+  }
+  for (unsigned symbols = 1; symbols <= 248; ++symbols) {
+    SCOPED_TRACE(symbols);
+    const SX1262SymbolTimeout timeout = sx1262SymbolTimeout(symbols);
+    // The register holds the count sent with the command, never below the request.
+    EXPECT_EQ(unsigned((timeout.reg >> 3) << (2 * (timeout.reg & 7) + 1)), unsigned(timeout.count));
+    EXPECT_GE(unsigned(timeout.count), symbols);
+  }
+}
+
+TEST(SX1262RxPowerSaving, SetsTheSymbolTimeoutWhenAP32HeaderStillFitsAfterTheWindow) {
+  for (float bw : {7.8f, 10.4f, 15.6f, 20.8f, 31.25f, 41.7f,
+                   62.5f, 125.0f, 250.0f, 500.0f}) {
+    for (uint8_t sf = 5; sf <= 12; ++sf) {
+      for (uint8_t p : {16, 32}) {
+        for (uint8_t level = 1; level <= 10; ++level) {
+          uint32_t rx, sleep, effective;
+          if (!recalcRxPowerSavingFromLevel(level, sf, bw, p, &rx, &sleep,
+                                           RX_POWERSAVING_CAPTURE_COST_SYMBOLS, 2600)) continue;
+          ASSERT_TRUE(adjustSX1262RxPowerSavingPeriod(rx, sleep, sf, bw, 2600, &effective));
+          EXPECT_EQ(sx1262RxPowerSavingSymbolTimeout(effective, sf, bw),
+                    SX1262_RX_POWERSAVING_SYMBOL_TIMEOUT);
+        }
+      }
+    }
+  }
+  // SF8/BW62.5: 4.096 ms symbols and 45.25 of them for a P32 header leave
+  // 50.75 symbols, 207872 us, for the window.
+  EXPECT_EQ(sx1262RxPowerSavingSymbolTimeout(207872, 8, 62.5f), SX1262_RX_POWERSAVING_SYMBOL_TIMEOUT);
+  EXPECT_EQ(sx1262RxPowerSavingSymbolTimeout(207873, 8, 62.5f), 0);
+  EXPECT_EQ(sx1262RxPowerSavingSymbolTimeout(500000, 8, 62.5f), 0);
 }
