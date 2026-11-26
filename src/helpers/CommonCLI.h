@@ -79,7 +79,7 @@ public:
   uint8_t extra_sf[4];
 
 private:
-  class RadioPrefs : public CommonRadioPrefs {
+  class RadioPrefs : public FemRxpsRadioPrefs {
     NodePrefs* _parent;
   protected:
     void structure() override {
@@ -110,6 +110,13 @@ private:
     }
   public:
     RadioPrefs(NodePrefs* parent) : _parent(parent) { }
+    bool getByKey(const char* key, char* value, size_t max_len) override {
+      if (strcmp(key, "pwr_sav_en") == 0) {
+        snprintf(value, max_len, "%u", _parent->powersaving_enabled ? 1u : 0u);
+        return true;
+      }
+      return FemRxpsRadioPrefs::getByKey(key, value, max_len);
+    }
     // PowerSaving variant
     RxPowerSavingConfig* getRxPowerSavingConfig() override { return &_parent->rxps; }
     // CommonRadioPrefs interface

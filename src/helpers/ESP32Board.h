@@ -114,8 +114,8 @@ public:
 
     // MCU enters light sleep
     onBeforeLightSleep();
-    esp_light_sleep_start();
-    onAfterLightSleep();
+    const bool slept = esp_light_sleep_start() == ESP_OK;
+    onAfterLightSleep(slept);
 
     // Avoid ISR flood during wakeup due to HIGH LEVEL interrupt
     gpio_wakeup_disable(wakeupPin);
@@ -134,8 +134,9 @@ public:
     portEXIT_CRITICAL(&sleepMux);
   }
 
+  // Sleep hooks run with interrupts disabled.
   virtual void onBeforeLightSleep() { }
-  virtual void onAfterLightSleep() { }
+  virtual void onAfterLightSleep(bool slept) { }
 
   uint8_t getStartupReason() const override { return startup_reason; }
 

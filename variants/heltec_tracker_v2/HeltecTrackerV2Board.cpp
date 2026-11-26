@@ -91,8 +91,8 @@ void HeltecTrackerV2Board::onBeforeLightSleep() {
   fem_rxps_gate.beforeSleep(loRaFEMControl.isLnaCanControl(), isLoRaFemLnaEnabled());
 }
 
-void HeltecTrackerV2Board::onAfterLightSleep() {
-  fem_rxps_gate.afterSleep();
+void HeltecTrackerV2Board::onAfterLightSleep(bool slept) {
+  fem_rxps_gate.afterSleep(slept);
 }
 
 bool HeltecTrackerV2Board::handleCommand(const char* command, uint32_t sender_timestamp, char* reply) {

@@ -68,10 +68,6 @@ public:
   virtual void setFEMTxGain(uint8_t g) = 0;
 
   // PowerSaving variant
-  virtual uint8_t getFEMRxps() const { return 1; }
-  virtual void setFEMRxps(uint8_t on) { }
-
-  // PowerSaving variant
   virtual RxPowerSavingConfig* getRxPowerSavingConfig() { return nullptr; }
   bool applyRxPowerSaving(uint8_t sf, float bw);
   bool isRxPowerSavingCalibrationActive() const;
@@ -80,4 +76,14 @@ public:
 
   bool setByKey(const char* key, const char* value) override;   // for dynamic key/value access
   bool getByKey(const char* key, char* value, size_t max_len) override;
+};
+
+class FemRxpsRadioPrefs : public CommonRadioPrefs {
+protected:
+  virtual uint8_t getFEMRxps() const = 0;
+  virtual void setFEMRxps(uint8_t on) = 0;
+
+public:
+  bool getByKey(const char* key, char* value, size_t max_len) override;
+  bool setByKey(const char* key, const char* value) override;
 };

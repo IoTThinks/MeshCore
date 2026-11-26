@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include <helpers/RefCountedDigitalPin.h>
 #include <helpers/ESP32Board.h>
-#include <helpers/FemRxpsGate.h>
+#include <helpers/esp32/FemRxpsGate.h>
 #include "LoRaFEMControl.h"
 
 #ifndef ADC_MULTIPLIER
@@ -29,8 +29,10 @@ public:
   void attachDynamicPrefs(KeyValueStore* prefs);
   bool handleCommand(const char* command, uint32_t sender_timestamp, char* reply) override;
 
+  FemRxpsGate& femRxpsGate() { return fem_rxps_gate; }
+
   void onBeforeLightSleep() override;
-  void onAfterLightSleep() override;
+  void onAfterLightSleep(bool slept) override;
   void onBeforeTransmit(void) override;
   void onAfterTransmit(void) override;
   void shutdownPeripherals() override;

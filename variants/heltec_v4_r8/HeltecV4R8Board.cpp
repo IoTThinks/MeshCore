@@ -39,8 +39,8 @@ void HeltecV4R8Board::onBeforeLightSleep() {
   fem_rxps_gate.beforeSleep(loRaFEMControl.isLnaCanControl(), isLoRaFemLnaEnabled());
 }
 
-void HeltecV4R8Board::onAfterLightSleep() {
-  fem_rxps_gate.afterSleep();
+void HeltecV4R8Board::onAfterLightSleep(bool slept) {
+  fem_rxps_gate.afterSleep(slept);
 }
 
 void HeltecV4R8Board::onAfterTransmit(void) {

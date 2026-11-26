@@ -29,6 +29,9 @@ AutoDiscoverRTCClock rtc_clock(fallback_clock);
 #endif
 
 bool radio_init() {
+#ifdef ENABLE_FEM_RXPS_GATE
+  board.femRxpsGate().setArmedProbe([] { return radio_driver.getRxPowerSavingStatus().armed; });
+#endif
   fallback_clock.begin();
   rtc_clock.begin(Wire);
   
