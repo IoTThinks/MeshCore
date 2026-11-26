@@ -216,5 +216,9 @@ bool applyRxPowerSavingConfig(RxPowerSavingConfig* config, uint8_t sf, float bw,
   const bool accepted = control->setRxPowerSaving(
       config->enabled && valid, config->rx_us, config->sleep_us);
   control->setRxPowerSavingConfigError(!valid);
+  // SmartRXPS: hand over the intent; the driver derives both profiles itself.
+  control->configureSmartRxPowerSaving(config->enabled && valid && accepted,
+                                       config->smart != 0, config->level, sf, bw,
+                                       config->hold_s);
   return valid && accepted;
 }

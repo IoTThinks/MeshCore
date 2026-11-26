@@ -32,6 +32,7 @@
 
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 
 static constexpr uint32_t RX_POWERSAVING_DEFAULT_RX_US = 65625UL;
@@ -101,6 +102,10 @@ static constexpr uint8_t RX_POWERSAVING_CONSERVATIVE_LEVEL = 3;   // catches 13 
 static constexpr uint8_t RX_POWERSAVING_BALANCED_LEVEL = 6;       // catches 10 (P16) / 10 (P32)
 static constexpr uint8_t RX_POWERSAVING_PROFILE_PREAMBLE = 16;
 static constexpr uint8_t RX_POWERSAVING_MAX_CONSEC_ARM_FAILURES = 3;
+#ifndef RX_POWERSAVING_DEFAULT_HOLD_S
+  #define RX_POWERSAVING_DEFAULT_HOLD_S 15
+#endif
+static constexpr uint8_t RX_POWERSAVING_MAX_HOLD_S = 120;
 
 // Symbols of a sender's preamble consumed before a packet can be latched:
 // ~2 to latch the preamble plus ~2 lost to RX-window startup, measured on
@@ -205,6 +210,11 @@ struct RxPowerSavingConfig {
   uint32_t sleep_us = RX_POWERSAVING_DEFAULT_SLEEP_US;
   uint8_t level = RX_POWERSAVING_BALANCED_LEVEL;
   uint8_t preamble = RX_POWERSAVING_PROFILE_PREAMBLE;
+  // SmartRXPS: pick the 16/32 profile from the preambles actually heard.
+  uint8_t smart = 1;
+  // SmartRXPS: seconds of continuous RX after every transmit (0 = off), so the
+  // replies, ACKs and path returns that follow our own packets are never slept through.
+  uint8_t hold_s = RX_POWERSAVING_DEFAULT_HOLD_S;
 };
 
 struct RxPowerSavingStatus {
@@ -217,6 +227,11 @@ struct RxPowerSavingStatus {
   // configured rx_us/sleep_us. Zero means "nothing armed yet".
   uint32_t effective_rx_us = 0;
   uint32_t effective_sleep_us = 0;
+  // SmartRXPS
+  bool rearm_pending = false;      // in fallback, waiting for the next re-arm try
+  uint32_t rearm_in_s = 0;
+  uint32_t rearm_tries = 0;
+  bool holding = false;            // continuous RX after a transmit
 };
 
 class RxPowerSavingControl {
@@ -247,6 +262,18 @@ public:
   // can read its own tcxoDelay only needs to override this one method.
   virtual uint32_t rxPowerSavingTransitionUs() const {
     return RX_POWERSAVING_TRANSITION_US;
+  }
+
+  // SmartRXPS. Called after setRxPowerSaving() with the persisted intent.
+  // A driver without support ignores it and keeps the periods it was given.
+  virtual void configureSmartRxPowerSaving(bool enabled, bool smart, uint8_t level,
+                                           uint8_t sf, float bw, uint8_t hold_s) {
+    (void)enabled; (void)smart; (void)level; (void)sf; (void)bw; (void)hold_s;
+  }
+  // Writes a one-line SmartRXPS report; returns false when unsupported.
+  virtual bool getSmartRxPowerSavingReport(char* reply, size_t reply_size) const {
+    (void)reply; (void)reply_size;
+    return false;
   }
 };
 

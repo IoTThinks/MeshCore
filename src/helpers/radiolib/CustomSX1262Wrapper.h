@@ -68,6 +68,11 @@ public:
   bool supportsRxPowerSaving() const override { return true; }
 
 protected:
+  // SmartRXPS
+  void setPreambleIrqRouting(bool enabled) override {
+    ((CustomSX1262 *)_radio)->routePreambleIrq = enabled;
+  }
+
   // PowerSaving variant
   int16_t armDutyCycle(RadioLibIrqFlags_t irq_flags, RadioLibIrqFlags_t irq_mask,
                        uint32_t* eff_rx_us, uint32_t* eff_sleep_us) override {

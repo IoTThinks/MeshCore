@@ -1004,6 +1004,8 @@ MyMesh::MyMesh(mesh::MainBoard &board, mesh::Radio &radio, mesh::MillisecondCloc
   _prefs.rxps.enabled = 1;
   _prefs.rxps.level = 6;
   _prefs.rxps.preamble = 16;
+  // SmartRXPS: a repeater transmits often, so keep its post-TX hold short.
+  _prefs.rxps.hold_s = 5;
 }
 
 void MyMesh::begin(FILESYSTEM *fs) {

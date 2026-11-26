@@ -14,6 +14,9 @@ class CustomSX1262 : public SX1262 {
   bool _headerSeen = false;
 
   public:
+    // SmartRXPS: set by the wrapper before each startReceive().
+    bool routePreambleIrq = false;
+
     // PowerSaving variant
     // The sleep -> RX transition RadioLib subtracts from a duty-cycle sleep.
     // Protected in the RadioLib base, so the RXPS layer reads it through here.
@@ -141,7 +144,9 @@ class CustomSX1262 : public SX1262 {
 
     int16_t startReceive() override {
       // include the PREAMBLE_DETECTED irq bit in reported flags
-      return SX1262::startReceive(RADIOLIB_SX126X_RX_TIMEOUT_INF, RADIOLIB_IRQ_RX_DEFAULT_FLAGS | (1UL << RADIOLIB_IRQ_PREAMBLE_DETECTED), RADIOLIB_IRQ_RX_DEFAULT_MASK, 0);
+      // SmartRXPS routes it to the IRQ pin too, to time the sender's preamble.
+      return SX1262::startReceive(RADIOLIB_SX126X_RX_TIMEOUT_INF, RADIOLIB_IRQ_RX_DEFAULT_FLAGS | (1UL << RADIOLIB_IRQ_PREAMBLE_DETECTED),
+          RADIOLIB_IRQ_RX_DEFAULT_MASK | (routePreambleIrq ? (1UL << RADIOLIB_IRQ_PREAMBLE_DETECTED) : 0UL), 0);
     }
 
     // PowerSaving variant

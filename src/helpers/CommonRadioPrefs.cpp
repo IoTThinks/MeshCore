@@ -57,6 +57,14 @@ bool CommonRadioPrefs::setByKey(const char* key, const char* value) {
 }
 
 bool CommonRadioPrefs::handleCommand(const char* command, uint32_t sender_timestamp, char* reply) {
+  // SmartRXPS
+  if (strcmp(command, "get radio.rxps.smart") == 0) {
+    auto* control = rxpsControl();
+    if (!control || !control->getSmartRxPowerSavingReport(reply, 160)) {
+      strcpy(reply, "Error: unsupported");
+    }
+    return true;
+  }
   // PowerSaving variant
   if (strncmp(command, "get radio.rxps", 14) == 0 &&
       (command[14] == 0 || command[14] == ' ')) {

@@ -4,6 +4,7 @@
 #include <RadioLib.h>
 // PowerSaving variant
 #include "RXPowerSaving.h"
+#include "SmartRxPowerSaving.h"
 
 #ifdef USE_CC310_HW_CRYPTO
 #include <Adafruit_nRFCrypto.h>
@@ -43,6 +44,41 @@ protected:
   int16_t _rx_ps_last_error;
   uint32_t n_rx_ps_arm_failures;
   RxPowerSavingArmRetryState _rx_ps_arm_retry;
+
+  // SmartRXPS
+  RxPsSmartEngine _smart;
+  uint32_t _smart_p16_rx = 0, _smart_p16_sleep = 0;
+  uint32_t _smart_p32_rx = 0, _smart_p32_sleep = 0;
+  bool _smart_on_long = false;        // periods currently from the 32-symbol profile
+  float _smart_symbol_us = 0.0f;
+  uint32_t _smart_pre_busy_ms = 100;  // preamble seen -> treat channel as busy this long
+  uint32_t _smart_max_pkt_ms = 5000;
+  bool _pre_irq_routed = false;       // PREAMBLE_DETECTED drives the IRQ pin right now
+  bool _pre_valid = false;
+  // Below this many remaining symbols a sender must have used a 16-symbol
+  // preamble: 17 on continuous RX, lower when a duty-cycle sleep can delay detection.
+  float _pre_short_below = RXPS_SMART_SHORT_BELOW_CLEAN;
+  float _mode_short_below = RXPS_SMART_SHORT_BELOW_CLEAN;
+  uint32_t _pre_us = 0;
+  uint32_t _pre_at_ms = 0;
+  uint8_t _hold_s = 0;
+  bool _hold_active = false;
+  bool _hold_applied = false;         // current continuous RX is because of the hold
+  uint32_t _hold_until = 0;
+  uint32_t _hold_count = 0;
+  bool _rearm_wait = false;
+  uint32_t _rearm_at = 0;
+  uint8_t _rearm_step = 0;
+  uint32_t _rearm_tries = 0;
+
+  bool smartRoutingWanted() const { return _rx_ps_enabled && _smart.active(); }
+  bool holdActive();
+  bool preambleRecentlySeen() const;
+  bool consumePreambleEvent(uint32_t irq_us);
+  void measurePreamble(uint32_t irq_us, int len);
+  void applySmartProfile(bool long_profile);
+  // Route PREAMBLE_DETECTED to the IRQ pin on the next startReceive().
+  virtual void setPreambleIrqRouting(bool enabled) { (void)enabled; }
 
   bool _nf_calib_active;
   unsigned long _nf_last_calib;
@@ -111,12 +147,17 @@ public:
   bool setRxPowerSaving(bool enabled, uint32_t rx_us, uint32_t sleep_us) override;
   void setRxPowerSavingLevel(uint8_t level) override { _rx_ps_level = level; }
   RxPowerSavingStatus getRxPowerSavingStatus() const override;
+  void configureSmartRxPowerSaving(bool enabled, bool smart, uint8_t level,
+                                   uint8_t sf, float bw, uint8_t hold_s) override;
+  bool getSmartRxPowerSavingReport(char* reply, size_t reply_size) const override;
   bool isRxPowerSavingCalibrationActive() const override { return _nf_calib_active; }
 
   bool hasPendingReceive() { return isPacketPendingOrReceiving(); }
 
   bool isReceiving() override {
     if (isReceivingPacket()) return true;
+    // SmartRXPS clears PREAMBLE_DETECTED to time it; keep the channel busy.
+    if (preambleRecentlySeen()) return true;
 
     return isChannelActive();
   }
@@ -153,6 +194,8 @@ public:
     // Clearing diagnostics also grants a fresh set of arm attempts. If they
     // fail again, the normal three-failure continuous-RX fallback applies.
     _rx_ps_arm_retry.reset();
+    _rearm_wait = false;
+    _rearm_step = 0;
   }
 
   virtual float getLastRSSI() const override;

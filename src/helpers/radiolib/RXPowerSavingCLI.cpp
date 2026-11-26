@@ -39,6 +39,37 @@ bool RXPowerSavingCLI::set(const char* value, uint8_t sf, float bw,
                            char* reply, size_t reply_size) {
   if (value == nullptr || config == nullptr || reply == nullptr || reply_size == 0) return false;
 
+  // SmartRXPS settings. These change no timing of their own: the driver
+  // re-derives the active profile from the level it already has.
+  if (strncmp(value, "smart ", 6) == 0 || strncmp(value, "hold ", 5) == 0) {
+    RxPowerSavingConfig next = *config;
+    if (strcmp(value, "smart on") == 0) {
+      next.smart = 1;
+    } else if (strcmp(value, "smart off") == 0) {
+      next.smart = 0;
+    } else if (strncmp(value, "hold ", 5) == 0) {
+      uint32_t secs = 0;
+      if (!parseRxPowerSavingUint32(value + 5, &secs) || secs > RX_POWERSAVING_MAX_HOLD_S) {
+        snprintf(reply, reply_size, "ERROR: hold is 0-%u seconds", RX_POWERSAVING_MAX_HOLD_S);
+        return false;
+      }
+      next.hold_s = (uint8_t)secs;
+    } else {
+      snprintf(reply, reply_size, "ERROR: use smart on|off or hold <0-%u>", RX_POWERSAVING_MAX_HOLD_S);
+      return false;
+    }
+    *config = next;
+    if (control) {
+      // Re-apply the whole intent: turning smart off must also restore the
+      // periods of the profile the user chose, not leave the smart ones armed.
+      RxPowerSavingConfig active = *config;
+      applyRxPowerSavingConfig(&active, sf, bw, control);
+    }
+    snprintf(reply, reply_size, "OK - smart=%s,hold=%us", config->smart ? "on" : "off",
+             (unsigned)config->hold_s);
+    return true;
+  }
+
   RxPowerSavingConfig proposed = *config;
   uint8_t level = 0;
   uint8_t preamble = rxPowerSavingPreambleForSF(sf);
@@ -215,6 +246,10 @@ bool RXPowerSavingCLI::set(const char* value, uint8_t sf, float bw,
   if (control) control->setRxPowerSavingConfigError(false);
 
   *config = proposed;
+  if (control) {
+    control->configureSmartRxPowerSaving(config->enabled != 0, config->smart != 0,
+                                         config->level, sf, bw, config->hold_s);
+  }
   snprintf(reply, reply_size, "OK - %s,level=%lu%s,preamble=%lu,rx=%lu,sleep=%lu",
            config->enabled ? "on" : "off", (unsigned long)config->level,
            rxPowerSavingLevelTag(config->level),
