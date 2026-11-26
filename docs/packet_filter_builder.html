@@ -1,0 +1,1277 @@
+<!-- PowerSaving variant -->
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MeshCore Filter Builder</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&display=swap">
+<style>
+/* Layout: two columns — rule builder on the left, sticky command sheet on the right; stacks on phones */
+:root {
+  --bg: #f3f6f7;
+  --panel: #ffffff;
+  --ink: #142126;
+  --muted: #56676d;
+  --line: #d7e0e3;
+  --accent: #0d6b78;
+  --accent-ink: #ffffff;
+  --accent-soft: #e0f0f2;
+  --drop: #b23a2b;
+  --drop-soft: #fbe9e6;
+  --allow: #1f7a45;
+  --allow-soft: #e3f3e9;
+  --warn: #8a5a00;
+  --warn-soft: #fff4da;
+  --code-bg: #10191c;
+  --code-ink: #d9ecef;
+  --code-dim: #7d979d;
+  --font-head: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e1517; --panel: #152024; --ink: #e3edef; --muted: #93a7ac; --line: #26363b;
+  --accent: #4fb8c6; --accent-ink: #062226; --accent-soft: #173238;
+  --drop: #f08a7a; --drop-soft: #3a1f1b; --allow: #6fd296; --allow-soft: #17301f;
+  --warn: #f1c35b; --warn-soft: #352a10; --code-bg: #081013; --code-ink: #d9ecef; --code-dim: #6f878d;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0e1517; --panel: #152024; --ink: #e3edef; --muted: #93a7ac; --line: #26363b;
+  --accent: #4fb8c6; --accent-ink: #062226; --accent-soft: #173238;
+  --drop: #f08a7a; --drop-soft: #3a1f1b; --allow: #6fd296; --allow-soft: #17301f;
+  --warn: #f1c35b; --warn-soft: #352a10; --code-bg: #081013; --code-ink: #d9ecef; --code-dim: #6f878d;
+  color-scheme: dark; }
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1240px; margin: 0 auto; padding-block: 28px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--font-head); text-wrap: balance; margin: 0; letter-spacing: .01em; }
+h1 { font-size: 30px; line-height: 1.1; }
+h2 { font-size: 20px; }
+h3 { font-size: 16px; }
+p { margin: 0; }
+.lede { color: var(--muted); max-width: 66ch; margin-top: 6px; }
+header.top { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; margin-bottom: 22px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 4px; }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+@media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.panel-head { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; }
+.hint { color: var(--muted); font-size: 13.5px; }
+
+button, select, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+.btn { border: 1px solid var(--line); background: var(--panel); border-radius: 7px; padding: 7px 12px; font-weight: 500; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:disabled { opacity: .45; cursor: not-allowed; }
+.btn.ghost { background: transparent; }
+.btn.danger { color: var(--drop); }
+.btn.small { padding: 4px 9px; font-size: 13px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* profile tabs */
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tab { border: 1px solid var(--line); background: transparent; border-radius: 7px; padding: 7px 14px; font-weight: 600; display: flex; gap: 8px; align-items: center; }
+.tab[aria-selected="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
+.tab .count { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-weight: 500; }
+.badge-active { font-size: 11px; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .06em; background: var(--accent); color: var(--accent-ink); border-radius: 4px; padding: 1px 5px; }
+
+.row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: transparent; padding: 7px 14px; font-weight: 500; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"].is-drop { background: var(--drop-soft); color: var(--drop); font-weight: 600; }
+.seg button[aria-pressed="true"].is-allow { background: var(--allow-soft); color: var(--allow); font-weight: 600; }
+.seg button[aria-pressed="true"].is-plain { background: var(--accent-soft); font-weight: 600; }
+
+/* rules list */
+.rules { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.rule { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: start; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.rule.off { opacity: .62; }
+.rule.editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.rid { font-family: var(--font-mono); font-size: 13px; color: var(--muted); padding-top: 2px; min-width: 2ch; text-align: right; font-variant-numeric: tabular-nums; }
+.rule .say { font-weight: 500; }
+.rule .cmd { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); word-break: break-word; margin-top: 2px; }
+.tag { display: inline-block; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; border-radius: 4px; padding: 1px 6px; margin-right: 6px; vertical-align: 1px; }
+.tag.drop { background: var(--drop-soft); color: var(--drop); }
+.tag.allow { background: var(--allow-soft); color: var(--allow); }
+.tools { display: flex; gap: 4px; flex-wrap: wrap; justify-content: end; }
+.icon-btn { border: 1px solid transparent; background: transparent; border-radius: 6px; padding: 3px 7px; font-size: 13px; color: var(--muted); }
+.icon-btn:hover { border-color: var(--line); color: var(--ink); }
+.icon-btn:disabled { opacity: .3; cursor: default; }
+.switch { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); cursor: pointer; }
+.empty { border: 1px dashed var(--line); border-radius: 8px; padding: 16px; color: var(--muted); text-align: center; }
+
+/* editor */
+.editor { border-color: var(--accent); }
+.step { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; align-items: start; }
+.step-n { width: 24px; height: 24px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: 13px; display: grid; place-items: center; font-family: var(--font-mono); }
+.step-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.step-body > label, .lbl { font-weight: 600; font-size: 14px; }
+select, input[type="text"], input[type="number"], textarea { background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 7px 10px; max-width: 100%; }
+select { padding-right: 28px; }
+input[type="text"], input[type="number"] { min-width: 0; }
+input.bad { border-color: var(--drop); }
+.inline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.inline > * { min-width: 0; }
+.extra { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.extra > label.check { display: flex; gap: 8px; align-items: center; font-weight: 500; cursor: pointer; }
+.extra .body { padding-left: 26px; display: flex; flex-direction: column; gap: 6px; }
+.preview { background: var(--code-bg); color: var(--code-ink); border-radius: 8px; padding: 10px 12px; font-family: var(--font-mono); font-size: 13px; word-break: break-word; }
+.preview .say { font-family: var(--font-body); color: var(--code-dim); font-size: 13px; margin-bottom: 4px; }
+.msgs { display: flex; flex-direction: column; gap: 6px; }
+.msg { border-radius: 7px; padding: 7px 10px; font-size: 13.5px; display: flex; gap: 8px; }
+.msg.err { background: var(--drop-soft); color: var(--drop); }
+.msg.warn { background: var(--warn-soft); color: var(--warn); }
+.msg.info { background: var(--accent-soft); color: var(--ink); }
+.msg b { font-weight: 600; }
+
+/* presets */
+.presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.preset { text-align: left; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; }
+.preset:hover { border-color: var(--accent); }
+.preset strong { font-size: 14px; }
+.preset span { font-size: 13px; color: var(--muted); }
+
+/* command sheet */
+.sheet { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); }
+@media (max-width: 900px) { .sheet { position: static; } }
+.term { background: var(--code-bg); color: var(--code-ink); border-radius: 9px; padding: 8px 0; font-family: var(--font-mono); font-size: 13px; max-height: 62vh; overflow: auto; }
+.term .grp { color: var(--code-dim); padding: 8px 14px 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .07em; }
+.line { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 3px 8px 3px 14px; }
+.line:hover { background: rgba(127, 170, 180, .12); }
+.line code { white-space: pre-wrap; word-break: break-word; }
+.line .why { display: block; color: var(--code-dim); font-family: var(--font-body); font-size: 12px; }
+.copy1 { border: 1px solid transparent; background: transparent; color: var(--code-dim); border-radius: 5px; padding: 2px 7px; font-size: 12px; font-family: var(--font-body); }
+.copy1:hover { border-color: var(--code-dim); color: var(--code-ink); }
+.copy1.done { color: var(--allow); }
+textarea.plain { width: 100%; font-family: var(--font-mono); font-size: 12.5px; min-height: 120px; resize: vertical; }
+details > summary { cursor: pointer; font-weight: 600; }
+details[open] > summary { margin-bottom: 8px; }
+.limits { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 14px; font-size: 13px; }
+.limits div { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--line); padding: 3px 0; }
+.limits b { font-family: var(--font-mono); font-weight: 500; font-variant-numeric: tabular-nums; }
+.usb { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; justify-content: space-between; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.usb-text { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.or { margin-top: 4px; }
+.vtxt-wrap { flex: 1 1 14em; display: flex; min-width: 0; }
+.vtxt-wrap input { flex: 1 1 auto; min-width: 0; }
+.vtxt-wrap input:has(+ .calc-btn:not([hidden])) { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.calc-btn { border: 1px solid var(--line); border-left: 0; background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: 13px; padding: 0 12px; border-radius: 0 7px 7px 0; white-space: nowrap; }
+.calc-btn:hover { background: var(--accent); color: var(--accent-ink); }
+dialog.ch { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--ink); padding: 0; width: min(440px, calc(100vw - 32px)); }
+dialog.ch::backdrop { background: rgba(8, 16, 18, .55); }
+.ch-body { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.ch-input { display: flex; min-width: 0; }
+.ch-input .prefix { border: 1px solid var(--line); border-right: 0; background: var(--accent-soft); color: var(--accent); font-family: var(--font-mono); font-weight: 600; padding: 7px 10px; border-radius: 7px 0 0 7px; }
+.ch-input input { flex: 1 1 auto; min-width: 0; font-family: var(--font-mono); }
+.ch-input .prefix + input { border-radius: 0 7px 7px 0; }
+.ch-result { display: flex; align-items: baseline; gap: 12px; background: var(--code-bg); color: var(--code-ink); border-radius: 8px; padding: 10px 12px; }
+.ch-result .big { font-family: var(--font-mono); font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ch-result .key { font-family: var(--font-mono); font-size: 11.5px; color: var(--code-dim); word-break: break-all; min-width: 0; }
+.dropzone { border: 1.5px dashed var(--line); border-radius: 7px; padding: 6px 12px; font-size: 13px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.dropzone:hover { border-color: var(--accent); color: var(--ink); }
+.dropzone.over { border-color: var(--accent); border-style: solid; background: var(--accent-soft); color: var(--ink); }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 14px; z-index: 20; }
+@media (prefers-reduced-motion: no-preference) { .rule, .btn, .tab { transition: border-color .15s, background-color .15s; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow">MeshCore repeater · packet filter</div>
+      <h1>Filter Builder</h1>
+      <p class="lede">Build your rules by picking from the menus. The page writes the commands for you, so you can copy them into the repeater CLI, either through the USB terminal or the remote CLI in the app.</p>
+    </div>
+    <div class="row">
+      <div class="dropzone" id="dropzone" role="button" tabindex="0" title="Drop a .json file or a text file with filter commands here">Drop file here</div>
+      <button class="btn ghost" id="btn-open" type="button">Open file</button>
+      <button class="btn ghost" id="btn-savefile" type="button">Save file</button>
+      <input type="file" id="file-in" accept=".json,application/json" hidden>
+      <button class="btn ghost" id="btn-import-toggle" type="button">Load commands</button>
+      <button class="btn ghost danger" id="btn-reset" type="button">Start over</button>
+    </div>
+  </header>
+
+  <div class="panel" id="import-panel" hidden style="margin-bottom:18px">
+    <h2>Load existing commands</h2>
+    <div class="usb">
+      <div class="usb-text">
+        <h3>Load from USB</h3>
+        <p class="hint">Connect the repeater with a USB cable and read its current filter rules directly. Works in Chrome or Edge on a computer. Close any other serial monitor or flasher that uses the port first.</p>
+      </div>
+      <button class="btn" id="btn-usb" type="button">Read from repeater</button>
+    </div>
+    <div class="msgs" id="usb-msgs"></div>
+    <h3 class="or">Or paste commands</h3>
+    <p class="hint">Paste a list of <code>filter …</code> commands, for example one you copied from here earlier. You can also drop a file on "Drop file here" at the top. Lines that are not filter commands are skipped.</p>
+    <textarea class="plain" id="import-text" spellcheck="false" placeholder="filter 1 add drop payload eq grptxt and hops gt 8&#10;filter 1 enable 0"></textarea>
+    <div class="msgs" id="import-msgs"></div>
+    <div class="row">
+      <button class="btn primary" id="btn-import" type="button">Load and replace</button>
+      <button class="btn ghost" id="btn-import-cancel" type="button">Cancel</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="col">
+      <section class="panel" aria-labelledby="h-profile">
+        <div class="panel-head">
+          <h2 id="h-profile">Profiles</h2>
+          <div class="tabs" role="tablist" id="tabs"></div>
+        </div>
+        <p class="hint">The repeater has two profiles, each with its own rules. Only the active profile is used. For example, profile 1 can be your normal setup and profile 2 a lockdown.</p>
+
+        <div class="row">
+          <span class="lbl">When no rule matches:</span>
+          <div class="seg" id="mode-seg">
+            <button type="button" data-mode="allow" class="is-allow">Forward the packet</button>
+            <button type="button" data-mode="drop" class="is-drop">Drop the packet</button>
+          </div>
+        </div>
+        <div class="row">
+          <label class="switch" style="color:var(--ink);font-size:14px"><input type="checkbox" id="make-active"> Make this profile active on the repeater</label>
+        </div>
+
+        <div class="panel-head" style="margin-top:4px">
+          <h3>Rules <span class="hint" id="rule-count"></span></h3>
+          <button class="btn primary" id="btn-new" type="button">+ New rule</button>
+        </div>
+        <p class="hint">Rules are checked from top to bottom. The first rule that matches decides what happens, so put the most specific rules at the top.</p>
+        <ul class="rules" id="rules"></ul>
+        <div class="msgs" id="profile-msgs"></div>
+      </section>
+
+      <section class="panel editor" id="editor" hidden aria-labelledby="h-editor">
+        <div class="panel-head">
+          <h2 id="h-editor">New rule</h2>
+          <button class="btn ghost small" id="btn-cancel" type="button">Close</button>
+        </div>
+
+        <div class="step">
+          <div class="step-n">1</div>
+          <div class="step-body">
+            <span class="lbl">What should happen to the packet?</span>
+            <div class="seg" id="act-seg">
+              <button type="button" data-act="drop" class="is-drop">Drop</button>
+              <button type="button" data-act="allow" class="is-allow">Allow</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-n">2</div>
+          <div class="step-body">
+            <label for="f-field">What should the rule look at?</label>
+            <select id="f-field"></select>
+            <p class="hint" id="f-field-help"></p>
+          </div>
+        </div>
+
+        <div class="step" id="step-value">
+          <div class="step-n">3</div>
+          <div class="step-body">
+            <span class="lbl" id="f-value-lbl">Condition</span>
+            <div class="inline">
+              <select id="f-op" aria-label="Comparison"></select>
+              <select id="f-vsel" aria-label="Value"></select>
+              <input type="number" id="f-vnum" aria-label="Value" style="width:9em">
+              <div class="vtxt-wrap">
+                <input type="text" id="f-vtxt" aria-label="Value" spellcheck="false" autocomplete="off">
+                <button type="button" class="calc-btn" id="btn-ch-calc" hidden title="Work out the hash from a channel name or key"># Name</button>
+              </div>
+            </div>
+            <p class="hint" id="f-value-help"></p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-n">4</div>
+          <div class="step-body">
+            <span class="lbl">Extra conditions <span class="hint">(optional, all must match)</span></span>
+
+            <div class="extra">
+              <label class="check"><input type="checkbox" id="x-and"> And one more condition</label>
+              <div class="body" id="x-and-body">
+                <div class="inline">
+                  <select id="a-field" aria-label="Field"></select>
+                  <select id="a-op" aria-label="Comparison"></select>
+                  <select id="a-vsel" aria-label="Value"></select>
+                  <input type="number" id="a-vnum" aria-label="Value" style="width:9em">
+                </div>
+                <p class="hint">Only one of these per rule. Path, channel, management and scope cannot be used here.</p>
+              </div>
+            </div>
+
+            <div class="extra">
+              <label class="check"><input type="checkbox" id="x-src"> And only from specific senders</label>
+              <div class="body" id="x-src-body">
+                <input type="text" id="s-list" spellcheck="false" autocomplete="off" placeholder="e.g. 6D or 6D A1 F0">
+                <p class="hint">Up to 4 one-byte sender hashes (2 hex characters), separated by spaces. Only checked on packet types that carry a sender (req, resp, txt, anonreq, path). All other packet types, such as group messages, adverts and acks, pass this condition.</p>
+              </div>
+            </div>
+
+            <div class="extra" id="x-scope-wrap">
+              <label class="check"><input type="checkbox" id="x-scope"> And only in a specific scope / region</label>
+              <div class="body" id="x-scope-body">
+                <input type="text" id="sc-name" spellcheck="false" autocomplete="off" placeholder="e.g. metro-west" maxlength="15">
+                <p class="hint">The name must be exactly as on the repeater (upper and lower case matter), max 15 characters. Packets without a scope pass this condition.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="preview" aria-live="polite">
+          <div class="say" id="pv-say"></div>
+          <div id="pv-cmd"></div>
+        </div>
+        <div class="msgs" id="ed-msgs"></div>
+        <div class="row">
+          <button class="btn primary" id="btn-save" type="button">Add rule</button>
+          <button class="btn ghost" id="btn-cancel2" type="button">Cancel</button>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="h-presets">
+        <h2 id="h-presets">Common rules</h2>
+        <p class="hint">Click to add a ready-made rule to the selected profile. Then adjust the values to fit your network.</p>
+        <div class="presets" id="presets"></div>
+      </section>
+
+      <details class="panel">
+        <summary>Firmware limits</summary>
+        <div class="limits">
+          <div>Profiles <b>2</b></div>
+          <div>Rules per profile <b>8</b></div>
+          <div>Extra condition <b>1</b></div>
+          <div>Path hashes per rule <b>4</b></div>
+          <div>Channels per rule <b>4</b></div>
+          <div>Senders per rule <b>4</b></div>
+          <div>Path hash size <b>1–3 B</b></div>
+          <div>Scope name <b>≤ 15 chars</b></div>
+        </div>
+        <p class="hint" style="margin-top:10px">The firmware adds new rules disabled, and they must be turned on with <code>filter enable &lt;id&gt;</code>. The command list does this for you.</p>
+      </details>
+    </div>
+
+    <div class="col sheet">
+      <section class="panel" aria-labelledby="h-out">
+        <div class="panel-head">
+          <h2 id="h-out">Commands</h2>
+          <button class="btn primary" id="btn-copy-all" type="button">Copy all</button>
+        </div>
+        <label class="switch" style="color:var(--ink);font-size:14px"><input type="checkbox" id="opt-clear" checked> Delete the old rules in the profile first</label>
+        <div class="term" id="term"></div>
+        <div class="msgs" id="out-msgs"></div>
+        <details>
+          <summary>As plain text</summary>
+          <textarea class="plain" id="plain" readonly spellcheck="false"></textarea>
+        </details>
+        <p class="hint">Over the remote CLI in the app, send one command at a time. Check afterwards with <code>filter 1 list</code> or <code>filter 2 list</code>.</p>
+      </section>
+    </div>
+  </div>
+</div>
+<dialog class="ch" id="ch-dialog" aria-labelledby="ch-title">
+  <form class="ch-body" id="ch-form" method="dialog">
+    <div class="panel-head">
+      <h2 id="ch-title">Channel hash</h2>
+      <button class="btn ghost small" type="button" id="ch-close">Close</button>
+    </div>
+    <div class="seg" id="ch-seg">
+      <button type="button" data-m="tag" class="is-plain">#channel name</button>
+      <button type="button" data-m="key" class="is-plain">Private key</button>
+    </div>
+    <div id="ch-tag-wrap" class="step-body">
+      <label for="ch-name">Channel name</label>
+      <div class="ch-input"><span class="prefix">#</span><input type="text" id="ch-name" spellcheck="false" autocomplete="off" placeholder="e.g. weather"></div>
+      <p class="hint">Type it exactly as in your app. Upper and lower case give different hashes.</p>
+    </div>
+    <div id="ch-key-wrap" class="step-body" hidden>
+      <label for="ch-key">Channel key</label>
+      <input type="text" id="ch-key" spellcheck="false" autocomplete="off" placeholder="32 hex characters or base64" style="font-family:var(--font-mono)">
+      <p class="hint">The 16-byte secret key shared in the app, as hex (32 characters) or base64. It is only used here in your browser.</p>
+    </div>
+    <div class="ch-result" aria-live="polite">
+      <span class="big" id="ch-hash">—</span>
+      <span class="key" id="ch-keyout">Type a name to see its hash.</span>
+    </div>
+    <div class="msgs" id="ch-msgs"></div>
+    <div class="row">
+      <button class="btn primary" type="button" id="ch-add" disabled>Add to rule</button>
+      <button class="btn ghost small" type="button" id="ch-public">Use the Public channel (0x11)</button>
+    </div>
+  </form>
+</dialog>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Field metadata — mirrors FilterParser.cpp and FilterRule.h limits
+// ---------------------------------------------------------------------------
+const MAX_RULES = 8, MAX_LIST = 4, MAX_SCOPE = 15;
+const LIST_LINE_MAX = 79;   // older firmware formats each list line into 80 bytes and cuts longer rules short
+const OPS = { eq: 'is', neq: 'is not', gt: 'is greater than', lt: 'is less than' };
+const ALL_OPS = ['eq', 'neq', 'gt', 'lt'];
+const ROUTE_OPTS = [['flood', 'Flood'], ['tflood', 'Flood with scope'], ['direct', 'Direct'], ['tdirect', 'Direct with scope']];
+const PAYLOAD_OPTS = [
+  ['grptxt', 'Group message (channel)', 5], ['grpdata', 'Group data (channel)', 6], ['txt', 'Direct message / remote CLI', 2],
+  ['advert', 'Advert', 4], ['ack', 'Acknowledgement (ack)', 3], ['req', 'Request (req)', 0],
+  ['resp', 'Response (resp)', 1], ['anonreq', 'Anonymous request / login', 7], ['path', 'Path packet', 8],
+  ['trace', 'Trace', 9], ['multi', 'Multipart', 10], ['ctrl', 'Control / discovery', 11], ['raw', 'Raw / custom', 15]
+];
+const FIELDS = {
+  payload:  { label: 'Packet type', kind: 'select', ops: ALL_OPS, opts: PAYLOAD_OPTS,
+              help: 'What kind of packet it is, for example group messages on a channel or adverts.' },
+  route:    { label: 'Route type', kind: 'select', ops: ['eq', 'neq'], opts: ROUTE_OPTS,
+              help: 'Whether the packet is sent as flood (to everyone) or direct along a known path.' },
+  hops:     { label: 'Hop count', kind: 'number', ops: ALL_OPS, min: 0, max: 255, def: 8,
+              help: 'How many repeaters the packet has already passed through.' },
+  pathsize: { label: 'Path hash size', kind: 'select', ops: ALL_OPS, opts: [['1', '1 byte'], ['2', '2 bytes'], ['3', '3 bytes']],
+              help: 'How large the repeater IDs in the path are. Older nodes use 1 byte.' },
+  path:     { label: 'Last repeater (path)', kind: 'pathlist', ops: ['eq', 'neq'],
+              help: 'The repeater the packet last came from, given by its hash.' },
+  channel:  { label: 'Channel', kind: 'bytelist', ops: ['eq', 'neq'],
+              help: 'The channel hash (1 byte). Only applies to group messages and group data.' },
+  snr:      { label: 'Signal-to-noise (SNR)', kind: 'number', ops: ALL_OPS, min: -128, max: 127, def: -10, unit: 'dB',
+              help: 'How clearly the packet was received, in whole dB. Best for filtering out weak signals.' },
+  rssi:     { label: 'Signal strength (RSSI)', kind: 'number', ops: ALL_OPS, min: -32768, max: 32767, def: -110, unit: 'dBm',
+              help: 'Received signal strength in dBm.' },
+  repeater: { label: 'Management traffic', kind: 'none', ops: [],
+              help: 'All traffic needed to manage the repeater: advert, txt, req, resp, ack, anonreq, path and ctrl. Typically used as "Allow" when the default is "Drop".' },
+  scope:    { label: 'Scope / region', kind: 'scope', ops: [],
+              help: 'Packets sent in a specific scope (region). The name must exist on the repeater.' }
+};
+const FIELD_ORDER = ['payload', 'route', 'hops', 'pathsize', 'snr', 'rssi', 'channel', 'path', 'repeater', 'scope'];
+const AND_FIELDS = ['payload', 'route', 'hops', 'pathsize', 'snr', 'rssi'];
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// ---------------------------------------------------------------------------
+// Value normalization and validation
+// ---------------------------------------------------------------------------
+function splitList(s) { return String(s || '').trim().split(/[\s,;]+/).filter(Boolean); }
+
+// path: 2/4/6 hex chars, all same size, max 4 → uppercase without 0x
+function checkPath(s) {
+  const toks = splitList(s);
+  if (!toks.length) return { err: 'Enter at least one repeater hash, e.g. AB.' };
+  if (toks.length > MAX_LIST) return { err: `At most ${MAX_LIST} repeater hashes per rule (you have ${toks.length}).` };
+  const out = [];
+  for (const t of toks) {
+    const h = t.replace(/^0x/i, '');
+    if (!/^[0-9a-f]+$/i.test(h) || ![2, 4, 6].includes(h.length))
+      return { err: `"${t}" is not a valid hash. Use 2, 4 or 6 hex characters (1, 2 or 3 bytes), e.g. AB, ABCD.` };
+    out.push(h.toUpperCase());
+  }
+  if (new Set(out.map((h) => h.length)).size > 1) return { err: 'All hashes in a rule must be the same size (e.g. all 2 characters).' };
+  return { list: out };
+}
+// channel/source: 1 byte each, max 4 → 0xNN
+function checkBytes(s, what) {
+  const toks = splitList(s);
+  if (!toks.length) return { err: `Enter at least one ${what}, e.g. 6D.` };
+  if (toks.length > MAX_LIST) return { err: `At most ${MAX_LIST} ${what}s per rule (you have ${toks.length}).` };
+  const out = [];
+  for (const t of toks) {
+    const h = t.replace(/^0x/i, '');
+    if (!/^[0-9a-f]{1,2}$/i.test(h)) return { err: `"${t}" is not 1 byte. Use 1–2 hex characters, e.g. 6D or 0x6D.` };
+    out.push('0x' + h.toUpperCase().padStart(2, '0'));
+  }
+  return { list: out };
+}
+function checkScope(s) {
+  const t = String(s || '').trim();
+  if (!t) return { err: 'Enter the scope/region name.' };
+  if (/\s/.test(t)) return { err: 'The scope name cannot contain spaces.' };
+  if (t.length > MAX_SCOPE) return { err: `The scope name can be at most ${MAX_SCOPE} characters (yours is ${t.length}).` };
+  return { name: t };
+}
+function checkScalar(field, op, val) {
+  const f = FIELDS[field];
+  if (!f.ops.includes(op)) return `"${OPS[op] || op}" cannot be used with ${f.label.toLowerCase()}.`;
+  if (f.kind === 'select') {
+    if (!f.opts.some((o) => o[0] === String(val))) return `Choose a value for ${f.label.toLowerCase()}.`;
+  } else if (f.kind === 'number') {
+    if (!/^-?\d+$/.test(String(val).trim())) return `${f.label} must be a whole number.`;
+    const n = parseInt(val, 10);
+    if (n < f.min || n > f.max) return `${f.label} must be between ${f.min} and ${f.max}.`;
+  }
+  return null;
+}
+
+// Full rule validation → { errors, warns }
+function validate(r) {
+  const errors = [], warns = [];
+  const f = FIELDS[r.field];
+  if (!f) { errors.push('Unknown field.'); return { errors, warns }; }
+  if (f.kind === 'select' || f.kind === 'number') {
+    const e = checkScalar(r.field, r.op, r.value); if (e) errors.push(e);
+  } else if (f.kind === 'pathlist') {
+    const c = checkPath(r.list.join(' ')); if (c.err) errors.push(c.err);
+  } else if (f.kind === 'bytelist') {
+    const c = checkBytes(r.list.join(' '), 'channel'); if (c.err) errors.push(c.err);
+  } else if (f.kind === 'scope') {
+    const c = checkScope(r.scope); if (c.err) errors.push(c.err);
+  }
+  if (r.and) {
+    if (!AND_FIELDS.includes(r.and.field)) errors.push('The extra condition cannot use this field.');
+    else if (r.and.field === r.field) errors.push('The extra condition must use a different field than the rule itself.');
+    else { const e = checkScalar(r.and.field, r.and.op, r.and.value); if (e) errors.push('Extra condition: ' + e); }
+  }
+  if (r.source) { const c = checkBytes(r.source.join(' '), 'sender'); if (c.err) errors.push(c.err); }
+  if (r.andScope != null) {
+    if (r.field === 'scope') errors.push('The rule already uses scope. Remove "only in a specific scope".');
+    else { const c = checkScope(r.andScope); if (c.err) errors.push(c.err); }
+  }
+  // Non-blocking hints
+  const usesRssi = r.field === 'rssi' || (r.and && r.and.field === 'rssi');
+  if (usesRssi) warns.push('RSSI can be inaccurate for flood packets because they wait in a queue before being processed. Prefer SNR.');
+  if (r.field === 'channel' && r.and && r.and.field === 'payload' && !['grptxt', 'grpdata'].includes(r.and.value) && r.and.op === 'eq')
+    warns.push('Channel rules only match group messages and group data, so this combination never matches.');
+  if (r.field === 'scope') warns.push('Only matches packets sent with a scope (tflood/tdirect).');
+  if (r.source) {
+    // Sender is only checked on these types; on every other type the condition passes
+    const withSender = ['req', 'resp', 'txt', 'anonreq', 'path'];
+    let fixed = null;
+    if (r.field === 'channel') fixed = 'group message / group data';
+    else if (r.field === 'payload' && r.op === 'eq' && !withSender.includes(r.value)) fixed = valueText('payload', r.value);
+    else if (r.and && r.and.field === 'payload' && r.and.op === 'eq' && !withSender.includes(r.and.value)) fixed = valueText('payload', r.and.value);
+    if (fixed) warns.push(`The sender condition does nothing here: packets of type "${fixed}" carry no readable sender, so the rule hits them from every sender.`);
+  }
+  // Older firmware cuts list lines at 79 characters; the remote CLI reply is short on every version
+  if (ruleArgs(r).length > LIST_LINE_MAX - 5) warns.push('This rule is long. The repeater applies it in full, but "filter list" can show it cut short over remote CLI, and older firmware cannot give it back to "Load from USB".');
+  if (r.field === 'pathsize' && r.op === 'gt' && r.value === '3') warns.push('Path hashes are at most 3 bytes, so "greater than 3" never matches.');
+  if (r.field === 'pathsize' && r.op === 'lt' && r.value === '1') warns.push('Path hashes are at least 1 byte, so "less than 1" never matches.');
+  return { errors, warns };
+}
+
+// ---------------------------------------------------------------------------
+// Command text and plain-language description
+// ---------------------------------------------------------------------------
+function ruleArgs(r) {
+  let s = `${r.action} ${r.field}`;
+  const k = FIELDS[r.field].kind;
+  if (k === 'scope') s += ` ${r.scope}`;
+  else if (k === 'pathlist' || k === 'bytelist') s += ` ${r.op} ${r.list.join(' ')}`;
+  else if (k !== 'none') s += ` ${r.op} ${r.value}`;
+  if (r.and) s += ` and ${r.and.field} ${r.and.op} ${r.and.value}`;
+  if (r.source) s += ` and source ${r.source.join(' ')}`;
+  if (r.andScope != null) s += ` and scope ${r.andScope}`;
+  return s;
+}
+function valueText(field, val) {
+  const f = FIELDS[field];
+  if (f.kind === 'select') { const o = f.opts.find((x) => x[0] === String(val)); return o ? o[1].toLowerCase() : val; }
+  return f.unit ? `${val} ${f.unit}` : String(val);
+}
+function orList(arr) { return arr.length > 1 ? arr.slice(0, -1).join(', ') + ' or ' + arr[arr.length - 1] : arr[0]; }
+function describe(r) {
+  const f = FIELDS[r.field];
+  const parts = [];
+  if (f.kind === 'none') parts.push('management traffic');
+  else if (f.kind === 'scope') parts.push(`the packet is in scope "${r.scope}"`);
+  else if (f.kind === 'pathlist') parts.push(`last repeater ${OPS[r.op]} ${orList(r.list)}`);
+  else if (f.kind === 'bytelist') parts.push(`channel ${OPS[r.op]} ${orList(r.list)}`);
+  else parts.push(`${f.label.toLowerCase()} ${OPS[r.op]} ${valueText(r.field, r.value)}`);
+  if (r.and) parts.push(`${FIELDS[r.and.field].label.toLowerCase()} ${OPS[r.and.op]} ${valueText(r.and.field, r.and.value)}`);
+  if (r.source) parts.push(`sender is ${orList(r.source)}`);
+  if (r.andScope != null) parts.push(`scope is "${r.andScope}"`);
+  const verb = r.action === 'drop' ? 'Drop' : 'Allow';
+  return f.kind === 'none'
+    ? `${verb} ${parts[0]}` + (parts.length > 1 ? ' when ' + parts.slice(1).join(' and ') : '')
+    : `${verb} when ${parts.join(' and ')}`;
+}
+
+// ---------------------------------------------------------------------------
+// State + persistence (per-viewer convenience only)
+// ---------------------------------------------------------------------------
+const STORE_KEY = 'mc-filterbuilder-en-v1';
+function blankState() { return { view: 1, active: 1, clear: true, profiles: { 1: { mode: 'allow', rules: [] }, 2: { mode: 'allow', rules: [] } } }; }
+function sampleState() {
+  const s = blankState();
+  s.sample = true;
+  s.profiles[1].rules = [
+    { action: 'drop', field: 'pathsize', op: 'eq', value: '1', list: [], scope: '', and: { field: 'payload', op: 'eq', value: 'grptxt' }, source: null, andScope: null, enabled: true },
+    { action: 'drop', field: 'snr', op: 'lt', value: '-12', list: [], scope: '', and: { field: 'payload', op: 'eq', value: 'advert' }, source: null, andScope: null, enabled: false }
+  ];
+  return s;
+}
+let state;
+try { state = JSON.parse(localStorage.getItem(STORE_KEY)) || sampleState(); } catch (e) { state = sampleState(); }
+function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {} }
+const prof = () => state.profiles[state.view];
+
+// ---------------------------------------------------------------------------
+// Editor
+// ---------------------------------------------------------------------------
+let editIndex = -1;   // -1 = new rule
+let draftAction = 'drop';
+
+function fillSelect(sel, opts, keep) {
+  const cur = keep ? sel.value : null;
+  sel.innerHTML = opts.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('');
+  if (cur && opts.some((o) => o[0] === cur)) sel.value = cur;
+}
+fillSelect($('f-field'), FIELD_ORDER.map((k) => [k, FIELDS[k].label]));
+
+function setupValueControls(field, opSel, vsel, vnum, vtxt) {
+  const f = FIELDS[field];
+  opSel.hidden = !f.ops.length;
+  fillSelect(opSel, f.ops.map((o) => [o, OPS[o]]), true);
+  vsel.hidden = f.kind !== 'select';
+  vnum.hidden = f.kind !== 'number';
+  if (vtxt) vtxt.hidden = !['pathlist', 'bytelist', 'scope'].includes(f.kind);
+  if (f.kind === 'select') fillSelect(vsel, f.opts.map((o) => [o[0], o[1]]), true);
+  if (f.kind === 'number') { vnum.min = f.min; vnum.max = f.max; if (vnum.value === '' || +vnum.value < f.min || +vnum.value > f.max) vnum.value = f.def; }
+}
+
+function onFieldChange() {
+  const field = $('f-field').value, f = FIELDS[field];
+  $('f-field-help').textContent = f.help;
+  $('btn-ch-calc').hidden = f.kind !== 'bytelist';
+  setupValueControls(field, $('f-op'), $('f-vsel'), $('f-vnum'), $('f-vtxt'));
+  $('step-value').hidden = f.kind === 'none';
+  const txt = $('f-vtxt');
+  if (f.kind === 'pathlist') { txt.placeholder = 'e.g. AB or AB CD EF'; txt.removeAttribute('maxlength');
+    $('f-value-lbl').textContent = 'Which repeater?';
+    $('f-value-help').textContent = 'Up to 4 hashes separated by spaces. 2 characters = 1 byte, 4 = 2 bytes, 6 = 3 bytes. All must be the same length, matching your network.'; }
+  else if (f.kind === 'bytelist') { txt.placeholder = 'e.g. 11 or 11 2A'; txt.removeAttribute('maxlength');
+    $('f-value-lbl').textContent = 'Which channel?';
+    $('f-value-help').textContent = 'Up to 4 one-byte channel hashes (2 hex characters), separated by spaces. Press "# Name" to work out the hash from a channel name.'; }
+  else if (f.kind === 'scope') { txt.placeholder = 'e.g. metro-west'; txt.maxLength = 15;
+    $('f-value-lbl').textContent = 'Which scope?';
+    $('f-value-help').textContent = 'Exactly as the name appears on the repeater. Upper and lower case matter. Max 15 characters.'; }
+  else { $('f-value-lbl').textContent = 'Condition';
+    $('f-value-help').textContent = f.kind === 'number' ? `Whole number between ${f.min} and ${f.max}${f.unit ? ' ' + f.unit : ''}.` : ''; }
+  // AND field list excludes the primary field
+  const andOpts = AND_FIELDS.filter((k) => k !== field).map((k) => [k, FIELDS[k].label]);
+  fillSelect($('a-field'), andOpts, true);
+  onAndFieldChange();
+  // "and scope" is meaningless when scope is the primary field
+  $('x-scope-wrap').hidden = field === 'scope';
+  refreshPreview();
+}
+function onAndFieldChange() {
+  setupValueControls($('a-field').value, $('a-op'), $('a-vsel'), $('a-vnum'), null);
+  refreshPreview();
+}
+
+function readEditor() {
+  const field = $('f-field').value, f = FIELDS[field];
+  const r = { action: draftAction, field, op: f.ops.length ? $('f-op').value : 'eq', value: '', list: [], scope: '',
+              and: null, source: null, andScope: null, enabled: true };
+  if (f.kind === 'select') r.value = $('f-vsel').value;
+  if (f.kind === 'number') r.value = String($('f-vnum').value).trim();
+  if (f.kind === 'pathlist') { const c = checkPath($('f-vtxt').value); r.list = c.list || splitList($('f-vtxt').value); }
+  if (f.kind === 'bytelist') { const c = checkBytes($('f-vtxt').value, 'channel'); r.list = c.list || splitList($('f-vtxt').value); }
+  if (f.kind === 'scope') r.scope = $('f-vtxt').value.trim();
+  if ($('x-and').checked) {
+    const af = $('a-field').value, afk = FIELDS[af].kind;
+    r.and = { field: af, op: $('a-op').value, value: afk === 'select' ? $('a-vsel').value : String($('a-vnum').value).trim() };
+  }
+  if ($('x-src').checked) { const c = checkBytes($('s-list').value, 'sender'); r.source = c.list || splitList($('s-list').value); }
+  if ($('x-scope').checked && field !== 'scope') r.andScope = $('sc-name').value.trim();
+  return r;
+}
+
+function renderMsgs(el, errors, warns, infos) {
+  el.innerHTML = [
+    ...(errors || []).map((m) => `<div class="msg err"><b>Fix:</b> ${esc(m)}</div>`),
+    ...(warns || []).map((m) => `<div class="msg warn"><b>Note:</b> ${esc(m)}</div>`),
+    ...(infos || []).map((m) => `<div class="msg info">${m}</div>`)
+  ].join('');
+}
+
+function refreshPreview() {
+  ['x-and', 'x-src', 'x-scope'].forEach((id) => { $(id + '-body').hidden = !$(id).checked; });
+  const r = readEditor();
+  const { errors, warns } = validate(r);
+  const idx = editIndex >= 0 ? editIndex : prof().rules.length;
+  $('pv-say').textContent = errors.length ? 'The rule is not complete yet' : describe(r);
+  $('pv-cmd').textContent = `filter ${state.view} add ${ruleArgs(r)}`;
+  renderMsgs($('ed-msgs'), errors, warns);
+  $('btn-save').disabled = errors.length > 0 || (editIndex < 0 && prof().rules.length >= MAX_RULES);
+  $('f-vtxt').classList.toggle('bad', errors.length > 0 && !$('f-vtxt').hidden && $('f-vtxt').value !== '');
+  ['act-seg'].forEach(() => $('act-seg').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.act === draftAction)));
+}
+
+function openEditor(index) {
+  editIndex = index;
+  const r = index >= 0 ? prof().rules[index]
+    : { action: 'drop', field: 'payload', op: 'eq', value: 'grptxt', list: [], scope: '', and: null, source: null, andScope: null };
+  draftAction = r.action;
+  $('h-editor').textContent = index >= 0 ? `Edit rule ${index}` : `New rule in profile ${state.view}`;
+  $('btn-save').textContent = index >= 0 ? 'Save changes' : 'Add rule';
+  $('f-field').value = r.field;
+  $('f-vtxt').value = ''; $('f-vnum').value = '';
+  onFieldChange();
+  const f = FIELDS[r.field];
+  if (f.ops.length) $('f-op').value = r.op;
+  if (f.kind === 'select') $('f-vsel').value = r.value;
+  if (f.kind === 'number') $('f-vnum').value = r.value;
+  if (f.kind === 'pathlist' || f.kind === 'bytelist') $('f-vtxt').value = r.list.join(' ');
+  if (f.kind === 'scope') $('f-vtxt').value = r.scope;
+  $('x-and').checked = !!r.and;
+  if (r.and) { $('a-field').value = r.and.field; onAndFieldChange(); $('a-op').value = r.and.op;
+    if (FIELDS[r.and.field].kind === 'select') $('a-vsel').value = r.and.value; else $('a-vnum').value = r.and.value; }
+  $('x-src').checked = !!r.source; $('s-list').value = r.source ? r.source.join(' ') : '';
+  $('x-scope').checked = r.andScope != null; $('sc-name').value = r.andScope || '';
+  $('editor').hidden = false;
+  refreshPreview();
+  render();
+  $('editor').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'nearest' });
+}
+function closeEditor() { $('editor').hidden = true; editIndex = -1; render(); }
+
+function saveEditor() {
+  const r = readEditor();
+  if (validate(r).errors.length) return;
+  delete state.sample;
+  if (editIndex >= 0) { r.enabled = prof().rules[editIndex].enabled; prof().rules[editIndex] = r; }
+  else { if (prof().rules.length >= MAX_RULES) return; prof().rules.push(r); }
+  save(); closeEditor(); toast(editIndex >= 0 ? 'Rule saved' : 'Rule added');
+}
+
+// ---------------------------------------------------------------------------
+// Presets
+// ---------------------------------------------------------------------------
+const R = (o) => Object.assign({ action: 'drop', op: 'eq', value: '', list: [], scope: '', and: null, source: null, andScope: null, enabled: true }, o);
+const PRESETS = [
+  { t: 'Group messages from old nodes', d: 'Drop channel messages from nodes using a 1-byte path. Direct messages still get through.',
+    rules: [R({ field: 'pathsize', value: '1', and: { field: 'payload', op: 'eq', value: 'grptxt' } }),
+            R({ field: 'pathsize', value: '1', and: { field: 'payload', op: 'eq', value: 'grpdata' } })] },
+  { t: 'Long flood routes', d: 'Drop group messages that have already travelled more than 8 hops.',
+    rules: [R({ field: 'payload', value: 'grptxt', and: { field: 'hops', op: 'gt', value: '8' } })] },
+  { t: 'Weak signals', d: 'Drop packets received with SNR below -10 dB.',
+    rules: [R({ field: 'snr', op: 'lt', value: '-10' })] },
+  { t: 'Specific channel', d: 'Drop a channel by its hash. Change 11 to your channel hash.',
+    rules: [R({ field: 'channel', list: ['0x11'] })] },
+  { t: 'Noisy repeater', d: 'Drop everything arriving directly from one repeater. Change AB to its hash.',
+    rules: [R({ field: 'path', list: ['AB'] })] },
+  { t: 'Lockdown', d: 'Drop everything except management traffic from your own node. Sets the default to "Drop". Change 6D to your hash.',
+    mode: 'drop', rules: [R({ action: 'allow', field: 'repeater', source: ['0x6D'] })] }
+];
+$('presets').innerHTML = PRESETS.map((p, i) => `<button type="button" class="preset" data-i="${i}"><strong>${esc(p.t)}</strong><span>${esc(p.d)}</span></button>`).join('');
+$('presets').addEventListener('click', (e) => {
+  const b = e.target.closest('.preset'); if (!b) return;
+  const p = PRESETS[+b.dataset.i];
+  if (prof().rules.length + p.rules.length > MAX_RULES) { toast(`Not enough room. A profile can hold at most ${MAX_RULES} rules.`); return; }
+  delete state.sample;
+  p.rules.forEach((r) => prof().rules.push(JSON.parse(JSON.stringify(r))));
+  if (p.mode) prof().mode = p.mode;
+  save(); render(); toast(`"${p.t}" added to profile ${state.view}`);
+});
+
+// ---------------------------------------------------------------------------
+// Command list
+// ---------------------------------------------------------------------------
+function buildCommands() {
+  const groups = [];
+  for (const p of [1, 2]) {
+    const P = state.profiles[p];
+    const used = P.rules.length > 0 || P.mode === 'drop';
+    if (!used) continue;
+    const lines = [];
+    if (state.clear) lines.push({ c: `filter ${p} clear`, why: 'Deletes the old rules and sets the default to "forward"' });
+    P.rules.forEach((r) => lines.push({ c: `filter ${p} add ${ruleArgs(r)}`, why: describe(r) }));
+    if (state.clear) P.rules.forEach((r, i) => { if (r.enabled) lines.push({ c: `filter ${p} enable ${i}`, why: `Turns rule ${i} on` }); });
+    // Mode last: a drop default is only applied once the allow rules exist
+    if (P.mode === 'drop' || !state.clear) lines.push({ c: `filter ${p} mode ${P.mode}`, why: P.mode === 'drop' ? 'Drop everything that matches no rule' : 'Forward everything that matches no rule' });
+    groups.push({ title: `Profile ${p}`, lines });
+  }
+  groups.push({ title: 'Active profile', lines: [{ c: `filter set profile ${state.active}`, why: `The repeater uses profile ${state.active}` }] });
+  return groups;
+}
+
+function lockoutRisk(p) {
+  const P = state.profiles[p];
+  if (P.mode !== 'drop') return false;
+  return !P.rules.some((r) => r.enabled && r.action === 'allow' &&
+    (r.field === 'repeater' || (r.field === 'payload' && r.op === 'eq' && r.value === 'txt')));
+}
+
+function renderOutput() {
+  const groups = buildCommands();
+  $('term').innerHTML = groups.map((g) => `<div class="grp">${esc(g.title)}</div>` + g.lines.map((l) =>
+    `<div class="line"><code>${esc(l.c)}<span class="why">${esc(l.why)}</span></code><button type="button" class="copy1" data-c="${esc(l.c)}">Copy</button></div>`).join('')).join('');
+  $('plain').value = groups.flatMap((g) => g.lines.map((l) => l.c)).join('\n');
+  const warns = [], infos = [];
+  [1, 2].forEach((p) => { if (lockoutRisk(p)) warns.push(`Profile ${p} drops everything, and no enabled rule allows management traffic. If you use the remote CLI, you can lose access to the repeater${p === state.active ? '' : ' once this profile becomes active'}. Add for example "Allow management traffic".`); });
+  if (!state.clear) infos.push('Without deleting first, the page cannot know which IDs the new rules get. Run <code>filter N list</code> and turn them on with <code>filter N enable &lt;id&gt;</code>. If the profile is full (8 rules), new rules are rejected.');
+  [1, 2].forEach((p) => { const off = state.profiles[p].rules.filter((r) => !r.enabled).length;
+    if (off && state.clear) infos.push(`${off} rule${off > 1 ? 's' : ''} in profile ${p} ${off > 1 ? 'are' : 'is'} turned off and will be added without being enabled.`); });
+  renderMsgs($('out-msgs'), [], warns, infos);
+}
+
+// ---------------------------------------------------------------------------
+// Main render
+// ---------------------------------------------------------------------------
+function render() {
+  $('tabs').innerHTML = [1, 2].map((p) => `<button type="button" class="tab" role="tab" data-p="${p}" aria-selected="${p === state.view}">Profile ${p}
+    <span class="count">${state.profiles[p].rules.length}/${MAX_RULES}</span>${p === state.active ? '<span class="badge-active">active</span>' : ''}</button>`).join('');
+  const P = prof();
+  $('mode-seg').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.mode === P.mode));
+  $('make-active').checked = state.active === state.view;
+  $('opt-clear').checked = state.clear;
+  $('rule-count').textContent = `${P.rules.length} of ${MAX_RULES}`;
+  $('btn-new').disabled = P.rules.length >= MAX_RULES;
+  $('btn-new').classList.toggle('primary', P.rules.length < MAX_RULES);
+  if (!P.rules.length) {
+    $('rules').innerHTML = `<li class="empty">No rules yet. Press "New rule" or pick one of the common rules below.</li>`;
+  } else {
+    $('rules').innerHTML = P.rules.map((r, i) => `<li class="rule${r.enabled ? '' : ' off'}${i === editIndex && !$('editor').hidden ? ' editing' : ''}">
+      <div class="rid">${i}</div>
+      <div><div class="say"><span class="tag ${r.action}">${r.action === 'drop' ? 'Drop' : 'Allow'}</span>${esc(describe(r).replace(/^(Drop|Allow) /, ''))}</div>
+        <div class="cmd">${esc(ruleArgs(r))}</div></div>
+      <div class="tools">
+        <label class="switch"><input type="checkbox" data-act="toggle" data-i="${i}" ${r.enabled ? 'checked' : ''}> On</label>
+        <button class="icon-btn" type="button" data-act="up" data-i="${i}" ${i === 0 ? 'disabled' : ''} aria-label="Move up">↑</button>
+        <button class="icon-btn" type="button" data-act="down" data-i="${i}" ${i === P.rules.length - 1 ? 'disabled' : ''} aria-label="Move down">↓</button>
+        <button class="icon-btn" type="button" data-act="edit" data-i="${i}">Edit</button>
+        <button class="icon-btn" type="button" data-act="del" data-i="${i}">Delete</button>
+      </div></li>`).join('');
+  }
+  const pm = [];
+  if (state.sample) pm.push('These are <b>example rules</b> so you can see how it works. Edit or delete them, or press "Start over".');
+  if (P.rules.length >= MAX_RULES) pm.push(`The profile is full. The firmware allows at most ${MAX_RULES} rules per profile.`);
+  renderMsgs($('profile-msgs'), [], [], pm);
+  renderOutput();
+}
+
+// ---------------------------------------------------------------------------
+// Import: replays commands exactly like the firmware (slot allocation, clear, enable)
+// ---------------------------------------------------------------------------
+function payloadToken(t) {
+  const lt = t.toLowerCase();
+  if (PAYLOAD_OPTS.some((o) => o[0] === lt)) return lt;
+  if (/^(0x[0-9a-f]+|\d+)$/i.test(t)) { const n = parseInt(t, lt.startsWith('0x') ? 16 : 10); const o = PAYLOAD_OPTS.find((x) => x[2] === n); if (o) return o[0]; }
+  return lt;
+}
+function parseAdd(raw) {
+  const t = raw, low = raw.map((x) => x.toLowerCase());
+  let i = 0;
+  const r = R({});
+  r.enabled = false;
+  r.action = low[i++]; if (!['drop', 'allow'].includes(r.action)) throw 'unknown action (use drop or allow)';
+  r.field = low[i++]; if (!FIELDS[r.field]) throw `unknown field "${t[i - 1] || ''}"`;
+  const k = FIELDS[r.field].kind;
+  const takeList = () => { const out = []; while (i < t.length && low[i] !== 'and') out.push(t[i++]); return out; };
+  if (k === 'scope') { r.scope = t[i++] || ''; }
+  else if (k !== 'none') {
+    r.op = low[i++] || '';
+    if (k === 'pathlist') { const c = checkPath(takeList().join(' ')); if (c.err) throw c.err; r.list = c.list; }
+    else if (k === 'bytelist') { const c = checkBytes(takeList().join(' '), 'channel'); if (c.err) throw c.err; r.list = c.list; }
+    else r.value = r.field === 'payload' ? payloadToken(t[i++] || '') : low[i++] || '';
+  }
+  while (i < t.length) {
+    if (low[i] !== 'and') throw `unexpected "${t[i]}"`;
+    i++;
+    const kw = low[i++];
+    if (kw === 'source') { const c = checkBytes(takeList().join(' '), 'sender'); if (c.err) throw c.err; r.source = c.list; }
+    else if (kw === 'scope') { r.andScope = t[i++] || ''; }
+    else { if (r.and) throw 'only one extra condition is allowed';
+      const af = kw, op = low[i++] || ''; const v = af === 'payload' ? payloadToken(t[i++] || '') : low[i++] || '';
+      r.and = { field: af, op, value: v }; }
+  }
+  const v = validate(r);
+  if (v.errors.length) throw v.errors[0];
+  return r;
+}
+function importCommands(text) {
+  const s = blankState();
+  const slots = { 1: Array(MAX_RULES).fill(null), 2: Array(MAX_RULES).fill(null) };
+  const errs = []; let n = 0;
+  text.split(/\r?\n/).forEach((line, ln) => {
+    const toks = line.trim().split(/\s+/).filter(Boolean);
+    if (!toks.length || toks[0].toLowerCase() !== 'filter') return;
+    let k = 1, p = s.active;
+    const where = `Line ${ln + 1}`;
+    try {
+      const a = (toks[k] || '').toLowerCase();
+      if (a === 'set') { const v = toks[k + 2]; if ((toks[k + 1] || '').toLowerCase() !== 'profile' || !['1', '2'].includes(v)) throw 'use "filter set profile 1" or "2"'; s.active = +v; n++; return; }
+      if (a === 'profile' || a === 'list') return;
+      if (a === '1' || a === '2') { p = +a; k++; }
+      const cmd = (toks[k] || '').toLowerCase(), rest = toks.slice(k + 1);
+      if (cmd === 'add') { const slot = slots[p].indexOf(null); if (slot < 0) throw `profile ${p} is full (${MAX_RULES} rules)`; slots[p][slot] = parseAdd(rest); }
+      else if (cmd === 'enable' || cmd === 'disable' || cmd === 'del') {
+        const id = rest[0]; if (!/^\d+$/.test(id || '') || +id >= MAX_RULES) throw 'invalid rule ID';
+        if (cmd === 'del') slots[p][+id] = null; else if (slots[p][+id]) slots[p][+id].enabled = cmd === 'enable'; else throw `rule ${id} does not exist`;
+      }
+      else if (cmd === 'clear') { slots[p].fill(null); s.profiles[p].mode = 'allow'; }
+      else if (cmd === 'mode') { const m = (rest[0] || '').toLowerCase(); if (!['allow', 'drop'].includes(m)) throw 'use mode allow or drop'; s.profiles[p].mode = m; }
+      else throw `unknown command "${toks[k] || ''}"`;
+      n++;
+    } catch (e) { errs.push(`${where}: ${e}`); }
+  });
+  [1, 2].forEach((p) => { s.profiles[p].rules = slots[p].filter(Boolean); });
+  s.view = s.active;
+  return { s, errs, n };
+}
+
+// ---------------------------------------------------------------------------
+// Events
+// ---------------------------------------------------------------------------
+let toastTimer;
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 2200); }
+function copyText(text, btn) {
+  const ok = () => { if (btn) { const o = btn.textContent; btn.textContent = 'Copied'; btn.classList.add('done'); setTimeout(() => { btn.textContent = o; btn.classList.remove('done'); }, 1400); } else toast('Copied'); };
+  const fallback = () => { const d = $('plain').closest('details'); d.open = true; $('plain').focus(); $('plain').select(); toast('Copy the selected text with Ctrl+C / ⌘C'); };
+  try { navigator.clipboard.writeText(text).then(ok, fallback); } catch (e) { fallback(); }
+}
+
+$('tabs').addEventListener('click', (e) => { const b = e.target.closest('.tab'); if (!b) return; state.view = +b.dataset.p; $('editor').hidden = true; editIndex = -1; save(); render(); });
+$('mode-seg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; prof().mode = b.dataset.mode; delete state.sample; save(); render(); });
+$('make-active').addEventListener('change', (e) => { state.active = e.target.checked ? state.view : (state.view === 1 ? 2 : 1); save(); render(); });
+$('opt-clear').addEventListener('change', (e) => { state.clear = e.target.checked; save(); render(); });
+$('btn-new').addEventListener('click', () => openEditor(-1));
+['btn-cancel', 'btn-cancel2'].forEach((id) => $(id).addEventListener('click', closeEditor));
+$('btn-save').addEventListener('click', saveEditor);
+$('act-seg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; draftAction = b.dataset.act; refreshPreview(); });
+$('f-field').addEventListener('change', onFieldChange);
+$('a-field').addEventListener('change', onAndFieldChange);
+['f-op', 'f-vsel', 'f-vnum', 'f-vtxt', 'a-op', 'a-vsel', 'a-vnum', 'x-and', 'x-src', 'x-scope', 's-list', 'sc-name']
+  .forEach((id) => { $(id).addEventListener('input', refreshPreview); $(id).addEventListener('change', refreshPreview); });
+
+$('rules').addEventListener('click', (e) => {
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  const i = +el.dataset.i, rules = prof().rules;
+  if (el.dataset.act === 'toggle') { rules[i].enabled = el.checked; }
+  else if (el.dataset.act === 'up' && i > 0) { [rules[i - 1], rules[i]] = [rules[i], rules[i - 1]]; }
+  else if (el.dataset.act === 'down' && i < rules.length - 1) { [rules[i + 1], rules[i]] = [rules[i], rules[i + 1]]; }
+  else if (el.dataset.act === 'edit') { openEditor(i); return; }
+  else if (el.dataset.act === 'del') {
+    if (el.dataset.confirm !== '1') { el.dataset.confirm = '1'; el.textContent = 'Delete?'; el.classList.add('danger'); setTimeout(() => { if (el.isConnected) { el.dataset.confirm = ''; el.textContent = 'Delete'; } }, 2500); return; }
+    rules.splice(i, 1); if (editIndex === i) $('editor').hidden = true; editIndex = -1;
+  } else return;
+  delete state.sample; save(); render();
+});
+$('term').addEventListener('click', (e) => { const b = e.target.closest('.copy1'); if (b) copyText(b.dataset.c, b); });
+$('btn-copy-all').addEventListener('click', (e) => copyText($('plain').value, e.currentTarget));
+
+$('btn-reset').addEventListener('click', (e) => {
+  const b = e.currentTarget;
+  if (b.dataset.confirm !== '1') { b.dataset.confirm = '1'; b.textContent = 'Click again to delete everything'; setTimeout(() => { b.dataset.confirm = ''; b.textContent = 'Start over'; }, 3000); return; }
+  b.dataset.confirm = ''; b.textContent = 'Start over';
+  state = blankState(); editIndex = -1; $('editor').hidden = true; save(); render(); toast('Everything has been reset');
+});
+// ---------------------------------------------------------------------------
+// Load from USB (Web Serial) — sends "filter N list" and parses the local listing:
+//   profile:1* mode:allow rules:2/8
+//   0 drop payload eq grptxt and hops gt 8
+//   1* allow repeater and source 0x6D        (* after id = disabled)
+// ---------------------------------------------------------------------------
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function serialExchange(port, cmds) {
+  const enc = new TextEncoder(), dec = new TextDecoder();
+  const reader = port.readable.getReader(), writer = port.writable.getWriter();
+  let buf = '', last = Date.now(), stop = false;
+  const pump = (async () => {
+    try {
+      while (!stop) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (value) { buf += dec.decode(value, { stream: true }); last = Date.now(); }
+      }
+    } catch (e) { /* port closed or cancelled */ }
+  })();
+  const outs = [];
+  try {
+    // Flush any half-typed command on the repeater side
+    await writer.write(enc.encode('\r'));
+    await sleep(400);
+    for (const c of cmds) {
+      buf = ''; last = Date.now();
+      const start = Date.now();
+      await writer.write(enc.encode(c + '\r'));
+      // Wait until output has gone quiet, or give up after 4 s
+      while (Date.now() - start < 4000) {
+        await sleep(100);
+        if (buf && Date.now() - last > 600) break;
+      }
+      outs.push(buf);
+    }
+  } finally {
+    stop = true;
+    try { await reader.cancel(); } catch (e) {}
+    await pump;
+    reader.releaseLock(); writer.releaseLock();
+  }
+  return outs;
+}
+
+function parseListOutput(text) {
+  const s = blankState();
+  const errs = []; let headers = 0, cur = 0, active = 0;
+  text.split(/\r?\n/).forEach((line) => {
+    const l = line.trim();
+    let m = l.match(/profile:([12])(\*?)\s+mode:(allow|drop)/i);
+    if (m) { cur = +m[1]; s.profiles[cur].mode = m[3].toLowerCase(); s.profiles[cur].rules = []; if (m[2]) active = cur; headers++; return; }
+    m = l.match(/^(\d+)(\*?)\s+((?:drop|allow)\s+.+)$/i);
+    if (m && cur) {
+      // A line of exactly 78-79 characters may have been cut by older firmware. A cut line can still
+      // look like a valid, shorter rule, so it is never trusted.
+      if (l.length === LIST_LINE_MAX || l.length === LIST_LINE_MAX - 1) { errs.push(`Profile ${cur}, rule ${m[1]} may have been cut short by the repeater and was skipped.`); return; }
+      try { const r = parseAdd(m[3].split(/\s+/)); r.enabled = !m[2]; s.profiles[cur].rules.push(r); }
+      catch (e) { errs.push(`Profile ${cur}, rule ${m[1]} could not be read: ${e}`); }
+    }
+  });
+  if (active) s.active = active;
+  s.view = s.active;
+  return { s, errs, headers };
+}
+
+// ---------------------------------------------------------------------------
+// Channel hash calculator
+//   hashtag key  = SHA-256("#name")[0..15]
+//   channel hash = SHA-256(16-byte key)[0]      (Public key izOH6cXN6mrJ5e26oRXNcg== → 0x11)
+// Pure-JS SHA-256 so it also works where crypto.subtle is unavailable (file://, plain http)
+// ---------------------------------------------------------------------------
+function sha256(bytes) {
+  const K = [0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  const H = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const len = bytes.length, total = ((len + 9 + 63) >> 6) << 6;
+  const m = new Uint8Array(total); m.set(bytes); m[len] = 0x80;
+  const bits = len * 8; for (let i = 0; i < 4; i++) m[total - 1 - i] = (bits >>> (8 * i)) & 0xff;
+  const w = new Uint32Array(64), r = (x, n) => (x >>> n) | (x << (32 - n));
+  for (let o = 0; o < total; o += 64) {
+    for (let i = 0; i < 16; i++) w[i] = (m[o + 4 * i] << 24) | (m[o + 4 * i + 1] << 16) | (m[o + 4 * i + 2] << 8) | m[o + 4 * i + 3];
+    for (let i = 16; i < 64; i++) {
+      const s0 = r(w[i - 15], 7) ^ r(w[i - 15], 18) ^ (w[i - 15] >>> 3), s1 = r(w[i - 2], 17) ^ r(w[i - 2], 19) ^ (w[i - 2] >>> 10);
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
+    }
+    let [a, b, c, d, e, f, g, h] = H;
+    for (let i = 0; i < 64; i++) {
+      const t1 = (h + (r(e, 6) ^ r(e, 11) ^ r(e, 25)) + ((e & f) ^ (~e & g)) + K[i] + w[i]) | 0;
+      const t2 = ((r(a, 2) ^ r(a, 13) ^ r(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+      h = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+    }
+    H[0] = (H[0] + a) | 0; H[1] = (H[1] + b) | 0; H[2] = (H[2] + c) | 0; H[3] = (H[3] + d) | 0;
+    H[4] = (H[4] + e) | 0; H[5] = (H[5] + f) | 0; H[6] = (H[6] + g) | 0; H[7] = (H[7] + h) | 0;
+  }
+  const out = new Uint8Array(32);
+  H.forEach((v, i) => { out[4 * i] = v >>> 24; out[4 * i + 1] = (v >>> 16) & 0xff; out[4 * i + 2] = (v >>> 8) & 0xff; out[4 * i + 3] = v & 0xff; });
+  return out;
+}
+const toHex = (b) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+function parseKey(s) {
+  const t = s.trim().replace(/\s+/g, '');
+  if (/^[0-9a-f]{32}$/i.test(t)) return Uint8Array.from(t.match(/../g), (h) => parseInt(h, 16));
+  try { const bin = atob(t); if (bin.length === 16) return Uint8Array.from(bin, (c) => c.charCodeAt(0)); } catch (e) {}
+  return null;
+}
+
+let chMode = 'tag', chResult = null;
+function chUpdate() {
+  $('ch-seg').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.m === chMode));
+  $('ch-tag-wrap').hidden = chMode !== 'tag';
+  $('ch-key-wrap').hidden = chMode !== 'key';
+  chResult = null;
+  const errs = [], warns = [];
+  let key = null, note = '';
+  if (chMode === 'tag') {
+    const name = $('ch-name').value.trim().replace(/^#/, '');
+    if (name) {
+      if (/\s/.test(name)) errs.push('A channel name cannot contain spaces.');
+      else { key = sha256(new TextEncoder().encode('#' + name)).slice(0, 16); note = `#${name} · key ${toHex(key)}`; }
+    } else note = 'Type a name to see its hash.';
+  } else {
+    const raw = $('ch-key').value;
+    if (raw.trim()) { key = parseKey(raw); if (!key) errs.push('The key must be 16 bytes: 32 hex characters or base64 like izOH6cXN6mrJ5e26oRXNcg==.'); else note = `key ${toHex(key)}`; }
+    else note = 'Paste the key to see its hash.';
+  }
+  if (key) {
+    const h = sha256(key)[0];
+    chResult = '0x' + h.toString(16).toUpperCase().padStart(2, '0');
+    if (h === 0x11 && toHex(key) !== '8b3387e9c5cdea6ac9e5edbaa115cd72') warns.push('This hash is the same as the Public channel (0x11), so the rule will also hit Public.');
+  }
+  const cur = splitList($('f-vtxt').value);
+  if (chResult && cur.length >= MAX_LIST) errs.push(`The rule already has ${MAX_LIST} channels, which is the most a rule can hold.`);
+  else if (chResult && cur.some((t) => t.replace(/^0x/i, '').toUpperCase().padStart(2, '0') === chResult.slice(2))) warns.push('This hash is already in the rule.');
+  $('ch-hash').textContent = chResult || '—';
+  $('ch-keyout').textContent = note;
+  renderMsgs($('ch-msgs'), errs, warns);
+  $('ch-add').disabled = !chResult || errs.length > 0;
+}
+function chAdd(hash) {
+  const cur = splitList($('f-vtxt').value);
+  if (cur.length >= MAX_LIST) return;
+  if (!cur.some((t) => t.replace(/^0x/i, '').toUpperCase().padStart(2, '0') === hash.slice(2))) cur.push(hash);
+  $('f-vtxt').value = cur.join(' ');
+  $('ch-dialog').close();
+  refreshPreview();
+  toast(`${hash} added`);
+}
+$('btn-ch-calc').addEventListener('click', () => {
+  $('ch-name').value = ''; $('ch-key').value = '';
+  chUpdate();
+  $('ch-dialog').showModal();
+  (chMode === 'tag' ? $('ch-name') : $('ch-key')).focus();
+});
+$('ch-seg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; chMode = b.dataset.m; chUpdate(); (chMode === 'tag' ? $('ch-name') : $('ch-key')).focus(); });
+['ch-name', 'ch-key'].forEach((id) => { $(id).addEventListener('input', chUpdate); $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); if (chResult && !$('ch-add').disabled) chAdd(chResult); } }); });
+$('ch-form').addEventListener('submit', (e) => { e.preventDefault(); if (chResult && !$('ch-add').disabled) chAdd(chResult); });
+$('ch-add').addEventListener('click', () => { if (chResult) chAdd(chResult); });
+$('ch-public').addEventListener('click', () => chAdd('0x11'));
+$('ch-close').addEventListener('click', () => $('ch-dialog').close());
+$('ch-dialog').addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
+
+$('btn-usb').addEventListener('click', async (ev) => {
+  const btn = ev.currentTarget;
+  const say = (errs, warns, infos) => renderMsgs($('usb-msgs'), errs, warns, infos);
+  const framed = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+  const blockedMsg = 'USB access is blocked while this page runs inside claude.ai. Open the standalone copy of this page (an .html file) in Chrome or Edge and use the button there.';
+  if (!('serial' in navigator)) {
+    say([], [framed ? blockedMsg : 'This browser cannot talk to USB devices. Open the page in Chrome or Edge on a computer.']);
+    return;
+  }
+  let port;
+  try { port = await navigator.serial.requestPort(); }
+  catch (e) {
+    if (e && e.name === 'NotFoundError') { say([], [], ['No port selected.']); return; }
+    say([], [framed || (e && e.name === 'SecurityError') ? blockedMsg : 'Could not ask for a USB port: ' + (e && e.message || e)]);
+    return;
+  }
+  btn.disabled = true;
+  say([], [], ['Reading from the repeater…']);
+  try {
+    try { await port.open({ baudRate: 115200 }); }
+    catch (e) { say(['Could not open the port. Close other programs that use it (serial monitor, flasher, another browser tab) and try again.']); return; }
+    // DTR on (needed by native-USB boards), RTS off (avoids resetting ESP32 boards)
+    try { await port.setSignals({ dataTerminalReady: true, requestToSend: false }); } catch (e) {}
+    await sleep(300);
+    const outs = await serialExchange(port, ['filter 1 list', 'filter 2 list']);
+    const { s, errs, headers } = parseListOutput(outs.join('\n'));
+    if (headers < 2) {
+      say(['No filter list came back. Check that the repeater runs firmware with the packet filter, that you picked the right port, and that it is not still starting up. Then try again.']);
+      return;
+    }
+    s.clear = state.clear;
+    state = s; editIndex = -1; $('editor').hidden = true; save(); render();
+    const n = s.profiles[1].rules.length + s.profiles[2].rules.length;
+    const infos = [`Read ${n} rule${n === 1 ? '' : 's'} from the repeater. Profile ${s.active} is active.`];
+    if (errs.length) errs.push('Add the skipped rules again by hand.');
+    say([], errs, infos);
+    toast('Loaded from repeater');
+  } catch (e) {
+    say(['Reading failed: ' + (e && e.message || e)]);
+  } finally {
+    try { await port.close(); } catch (e) {}
+    btn.disabled = false;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Save / open a local JSON file
+//   { format, version, active, profiles: { "1": { mode, rules: [{ rule, enabled }] }, "2": … } }
+// Each rule is stored as its command text, so loading reuses the same parser and limits.
+// ---------------------------------------------------------------------------
+const FILE_FORMAT = 'meshcore-filter-builder';
+function stateToFile() {
+  const out = { format: FILE_FORMAT, version: 1, active: state.active, profiles: {} };
+  [1, 2].forEach((p) => { out.profiles[p] = { mode: state.profiles[p].mode,
+    rules: state.profiles[p].rules.map((r) => ({ rule: ruleArgs(r), enabled: !!r.enabled })) }; });
+  return JSON.stringify(out, null, 2) + '\n';
+}
+function fileToState(text) {
+  let j;
+  try { j = JSON.parse(text); } catch (e) { throw 'The file is not valid JSON.'; }
+  if (!j || j.format !== FILE_FORMAT || !j.profiles) throw 'This is not a filter file saved from this page.';
+  const s = blankState(); const errs = [];
+  [1, 2].forEach((p) => {
+    const P = j.profiles[p] || j.profiles[String(p)];
+    if (!P) return;
+    s.profiles[p].mode = P.mode === 'drop' ? 'drop' : 'allow';
+    (Array.isArray(P.rules) ? P.rules : []).forEach((x, i) => {
+      if (s.profiles[p].rules.length >= MAX_RULES) { errs.push(`Profile ${p}: rule ${i} skipped, a profile holds at most ${MAX_RULES} rules.`); return; }
+      try { const r = parseAdd(String(x && x.rule || '').trim().split(/\s+/)); r.enabled = !!(x && x.enabled); s.profiles[p].rules.push(r); }
+      catch (e) { errs.push(`Profile ${p}, rule ${i}: ${e}`); }
+    });
+  });
+  s.active = j.active === 2 ? 2 : 1;
+  s.view = s.active;
+  return { s, errs };
+}
+let dlPromise = null;
+$('btn-savefile').addEventListener('click', async () => {
+  const data = stateToFile(), filename = 'meshcore-filters.json';
+  const framed = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+  if (framed && window.claude && window.claude.use) {
+    if (!dlPromise) dlPromise = window.claude.use('downloads');
+    const dl = await dlPromise;
+    if (dl) {
+      try { await dl.save({ filename, data }); toast('File saved'); }
+      catch (e) { if (!e || e.code !== 'declined') toast('Saving a file is not available here. Copy the commands instead.'); }
+      return;
+    }
+  }
+  if (framed) { toast('Saving a file is not available here. Copy the commands instead.'); return; }
+  // Standalone page: plain browser download
+  const url = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+  const a = document.createElement('a'); a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast('File saved');
+});
+$('btn-open').addEventListener('click', () => { $('file-in').value = ''; $('file-in').click(); });
+async function loadFile(f) {
+  if (!f) return;
+  // A plain text / command list goes into the paste box instead
+  if (!/\.json$/i.test(f.name) && f.type !== 'application/json') {
+    $('import-text').value = await f.text();
+    $('import-panel').hidden = false; $('import-msgs').innerHTML = '';
+    toast(`${f.name} put in the paste box. Press "Load and replace".`);
+    return;
+  }
+  try {
+    const { s, errs } = fileToState(await f.text());
+    s.clear = state.clear;
+    state = s; editIndex = -1; $('editor').hidden = true; save(); render();
+    if (errs.length) { $('import-panel').hidden = false; renderMsgs($('import-msgs'), [], errs.map((x) => x + ' (skipped)')); }
+    toast(`Opened ${f.name}`);
+  } catch (e) {
+    $('import-panel').hidden = false; renderMsgs($('import-msgs'), [String(e)], []);
+  }
+}
+$('file-in').addEventListener('change', () => loadFile($('file-in').files[0]));
+
+// Drag and drop onto the small drop zone next to the file buttons
+const hasFiles = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+const zone = $('dropzone');
+// Stop the browser from opening a file dropped elsewhere on the page
+document.addEventListener('dragover', (e) => { if (hasFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = zone.contains(e.target) ? 'copy' : 'none'; } });
+document.addEventListener('drop', (e) => { if (hasFiles(e)) e.preventDefault(); });
+zone.addEventListener('dragenter', (e) => { if (hasFiles(e)) zone.classList.add('over'); });
+zone.addEventListener('dragleave', (e) => { if (!zone.contains(e.relatedTarget)) zone.classList.remove('over'); });
+zone.addEventListener('drop', (e) => {
+  if (!hasFiles(e)) return;
+  e.preventDefault(); e.stopPropagation(); zone.classList.remove('over');
+  loadFile(e.dataTransfer.files[0]);
+});
+zone.addEventListener('click', () => { $('file-in').value = ''; $('file-in').click(); });
+zone.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); zone.click(); } });
+
+$('btn-import-toggle').addEventListener('click', () => { $('import-panel').hidden = !$('import-panel').hidden; if (!$('import-panel').hidden) $('import-text').focus(); });
+$('btn-import-cancel').addEventListener('click', () => { $('import-panel').hidden = true; });
+$('btn-import').addEventListener('click', () => {
+  const { s, errs, n } = importCommands($('import-text').value);
+  if (!n) { renderMsgs($('import-msgs'), errs.length ? errs : ['No filter commands found in the text.'], []); return; }
+  s.clear = state.clear;
+  state = s; editIndex = -1; $('editor').hidden = true; save(); render();
+  if (errs.length) renderMsgs($('import-msgs'), [], errs.map((x) => x + ' (skipped)'));
+  else { $('import-panel').hidden = true; $('import-msgs').innerHTML = ''; }
+  toast(`${n} command${n > 1 ? 's' : ''} loaded`);
+});
+
+render();
+</script>

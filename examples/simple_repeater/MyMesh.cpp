@@ -577,6 +577,16 @@ mesh::DispatcherAction MyMesh::onRecvPacket(mesh::Packet* pkt) {
   } else {
     recv_pkt_region = NULL;
   }
+
+  // PowerSaving variant
+#if PACKET_FILTER
+  // Run packet through the filter engine (region_map is needed for scope rules)
+  if (_filter.evaluate(pkt, (int16_t)_radio->getLastRSSI(), &region_map)) {
+    MESH_DEBUG_PRINTLN("*** FILTER: packet dropped ***");
+    return ACTION_RELEASE;
+  }
+#endif
+
   return Mesh::onRecvPacket(pkt);
 }
 
@@ -1004,6 +1014,11 @@ void MyMesh::begin(FILESYSTEM *fs) {
   acl.load(_fs, self_id);
   // TODO: key_store.begin();
   region_map.load(_fs);
+
+  // PowerSaving variant
+#if PACKET_FILTER
+  _filter.load(*_fs);   // packet filter rules
+#endif
 
   // establish default-scope
   {
@@ -1495,6 +1510,12 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, ClientInfo* sender, char *
       sendNodeDiscoverReq();
       strcpy(reply, "OK - Discover sent");
     }
+  // PowerSaving variant
+#if PACKET_FILTER
+  } else if (strncmp(command, "filter", 6) == 0 && (command[6] == ' ' || command[6] == '\0')) {
+    const char* filter_args = (command[6] == ' ') ? command + 7 : "";
+    _filter.handleCommand(filter_args, reply, *_fs, sender);
+#endif
   } else{
     _cli.handleCommand(sender_timestamp, command, reply);  // common CLI commands
   }
@@ -1655,16 +1676,37 @@ void MyMesh::loop() {
   last_millis = now;
 }
 
+// Only for boards using HW USB CDC (Heltec V4, XIAO S3/C3/C6...)
+#if defined(ESP_PLATFORM) && ARDUINO_USB_CDC_ON_BOOT == 1 && ARDUINO_USB_MODE == 1
+#define USB_UNPLUG_DELAY_MS 5000
+
+inline bool isUsbConnected() {
+  static uint32_t lastPluggedMs = 0;
+
+  // PC detected: Save the time
+  if (Serial.isPlugged()) lastPluggedMs = millis();
+
+  // Has not plugged to PC
+  if (lastPluggedMs == 0) return false;
+
+  return millis() - lastPluggedMs < USB_UNPLUG_DELAY_MS;
+}
+
+#endif
+
 // To check if there is pending work
 bool MyMesh::hasPendingWork() const {
 #if defined(WITH_BRIDGE)
   if (bridge.isRunning()) return true;  // bridge needs WiFi radio, can't sleep
 #endif
 
+// For boards using HW USB CDC, skip sleep if connected to PC via USB
+#if defined(ESP_PLATFORM) && ARDUINO_USB_CDC_ON_BOOT == 1 && ARDUINO_USB_MODE == 1
+  if (isUsbConnected()) return true;
+#endif
   // PowerSaving variant
   // For boards using HW USB CDC, skip sleep if connected to PC via USB
   if (PowerSaving::hasUsbPendingWork()) return true;
-
   // PowerSaving variant
   return _mgr->getOutboundTotal() > 0 || _mgr->getInboundTotal() > 0 ||  // rxdelay packets wait in the inbound queue
          isTransmitting() || _prefs.getRadioPrefs()->isRxPowerSavingCalibrationActive();
