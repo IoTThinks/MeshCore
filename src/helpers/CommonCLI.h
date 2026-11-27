@@ -108,6 +108,8 @@ private:
       def("rxps_sleep_us", _parent->rxps.sleep_us);
       def("rxps_level", _parent->rxps.level);
       def("rxps_preamble", _parent->rxps.preamble);
+      def("rxps_smart", _parent->rxps.smart);
+      def("rxps_hold", _parent->rxps.hold_s);
     }
   public:
     RadioPrefs(NodePrefs* parent) : _parent(parent) { }

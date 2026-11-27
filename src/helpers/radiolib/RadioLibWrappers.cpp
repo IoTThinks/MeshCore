@@ -19,6 +19,8 @@
 #define NF_CALIB_MAX_SAMPLE_ATTEMPTS (NUM_NOISE_FLOOR_SAMPLES * 4U)
 
 static volatile uint8_t state = STATE_IDLE;
+// SmartRXPS: time of the latest radio IRQ edge (preamble, RX done or TX done)
+static volatile uint32_t irq_edge_us = 0;
 
 // this function is called when a complete packet
 // is transmitted by the module
@@ -27,6 +29,7 @@ static
   ICACHE_RAM_ATTR
 #endif
 void setFlag(void) {
+  irq_edge_us = micros();
   // we sent a packet, set the flag
   state |= STATE_INT_READY;
 }
@@ -172,7 +175,7 @@ void RadioLibWrapper::requestRestartRecv() {
 
 // PowerSaving variant
 bool RadioLibWrapper::isPacketPendingOrReceiving() {
-  return (state & STATE_INT_READY) != 0 || isReceivingPacket();
+  return (state & STATE_INT_READY) != 0 || isReceivingPacket() || preambleRecentlySeen();
 }
 
 // PowerSaving variant
@@ -231,6 +234,20 @@ void RadioLibWrapper::endNoiseFloorCalib(unsigned long now) {
 
 // PowerSaving variant
 void RadioLibWrapper::loop() {
+  // SmartRXPS: profile switches, end of the post-TX hold, scheduled re-arm.
+  if (_smart.active() && _smart.tick(millis())) {
+    if (_smart.wantsLongProfile() != _smart_on_long) applySmartProfile(_smart.wantsLongProfile());
+  }
+  if (_hold_applied && !holdActive() && (state & ~STATE_INT_READY) == STATE_RX &&
+      !isPacketPendingOrReceiving()) {
+    _hold_applied = false;
+    requestRestartRecv();
+  }
+  if (_rearm_wait && (long)(millis() - _rearm_at) >= 0 &&
+      (state & ~STATE_INT_READY) == STATE_RX && !isPacketPendingOrReceiving()) {
+    requestRestartRecv();
+  }
+
   if (_rx_ps_restart_pending && (state & ~STATE_INT_READY) != STATE_TX_WAIT &&
       !isPacketPendingOrReceiving()) {
     _rx_ps_restart_pending = false;
@@ -275,7 +292,17 @@ int16_t RadioLibWrapper::startReceiveMode() {
     return RADIOLIB_ERR_NONE;
   }
   if (_rx_ps_armed) stopReceiveDutyCycle();
-  if (!_rx_ps_enabled || _nf_calib_active) {
+
+  // SmartRXPS: a restart abandons any half-timed preamble.
+  _pre_valid = false;
+  const bool route = smartRoutingWanted();
+  setPreambleIrqRouting(route);
+  _pre_irq_routed = route;
+  _mode_short_below = RXPS_SMART_SHORT_BELOW_CLEAN;
+  const bool hold = _rx_ps_enabled && holdActive();
+  _hold_applied = hold && !_nf_calib_active;
+
+  if (!_rx_ps_enabled || _nf_calib_active || hold) {
     _rx_ps_armed = false;
     const int16_t err = startContinuousReceive();
     if (err == RADIOLIB_ERR_NONE) _nf_sample_from = millis() + NF_CALIB_SETTLE_MS;
@@ -284,13 +311,26 @@ int16_t RadioLibWrapper::startReceiveMode() {
   }
 
   if (!_rx_ps_arm_retry.canAttempt()) {
-    // arming has failed repeatedly; stop paying for a doomed SPI round-trip on
-    // every RX restart. A config change (setRxPowerSaving) re-enables retries.
-    _rx_ps_armed = false;
-    const int16_t err = startContinuousReceive();
-    if (err == RADIOLIB_ERR_NONE) _nf_sample_from = millis() + NF_CALIB_SETTLE_MS;
-    else _rx_ps_last_error = err;
-    return err;
+    // SmartRXPS watchdog: stock firmware stays on continuous RX until reboot
+    // here. Instead wait out a growing backoff, then give the hardware a fresh
+    // set of attempts. loop() triggers the restart when the time comes.
+    const uint32_t now = millis();
+    if (!_rearm_wait) {
+      _rearm_wait = true;
+      _rearm_at = now + rxPsRearmBackoffMs(_rearm_step);
+    }
+    if ((long)(now - _rearm_at) >= 0) {
+      _rearm_wait = false;
+      _rearm_tries++;
+      if (_rearm_step < 8) _rearm_step++;
+      _rx_ps_arm_retry.reset();
+    } else {
+      _rx_ps_armed = false;
+      const int16_t err = startContinuousReceive();
+      if (err == RADIOLIB_ERR_NONE) _nf_sample_from = millis() + NF_CALIB_SETTLE_MS;
+      else _rx_ps_last_error = err;
+      return err;
+    }
   }
 
   const RadioLibIrqFlags_t irq_flags =
@@ -300,7 +340,8 @@ int16_t RadioLibWrapper::startReceiveMode() {
       (1UL << RADIOLIB_IRQ_RX_DONE) |
       (1UL << RADIOLIB_IRQ_TIMEOUT) |
       (1UL << RADIOLIB_IRQ_CRC_ERR) |
-      (1UL << RADIOLIB_IRQ_HEADER_ERR);
+      (1UL << RADIOLIB_IRQ_HEADER_ERR) |
+      (route ? (1UL << RADIOLIB_IRQ_PREAMBLE_DETECTED) : 0UL);
 
   uint32_t eff_rx_us = _rx_ps_rx_us;
   uint32_t eff_sleep_us = _rx_ps_sleep_us;
@@ -311,6 +352,13 @@ int16_t RadioLibWrapper::startReceiveMode() {
     _rx_ps_arm_retry.recordSuccess();
     _rx_ps_eff_rx_us = eff_rx_us;
     _rx_ps_eff_sleep_us = eff_sleep_us;
+    _rearm_wait = false;
+    _rearm_step = 0;
+    if (_smart_symbol_us > 0.0f) {
+      // A long sender can be detected up to sleep + capture cost late.
+      _mode_short_below = rxPsSmartShortBelowForSleep(
+          (float)eff_sleep_us / _smart_symbol_us, rxPowerSavingCaptureCostSymbols());
+    }
     return err;
   }
 
@@ -366,6 +414,8 @@ bool RadioLibWrapper::setRxPowerSaving(bool enabled, uint32_t rx_us, uint32_t sl
   _rx_ps_sleep_us = sleep_us;
   _rx_ps_last_error = RADIOLIB_ERR_NONE;
   _rx_ps_arm_retry.reset();   // new config, give the hardware a fresh chance
+  _rearm_wait = false;
+  _rearm_step = 0;
   _rx_ps_restart_pending = true;
   if ((state & ~STATE_INT_READY) != STATE_TX_WAIT && !isPacketPendingOrReceiving()) {
     _rx_ps_restart_pending = false;
@@ -383,6 +433,10 @@ RxPowerSavingStatus RadioLibWrapper::getRxPowerSavingStatus() const {
   status.arm_failures = n_rx_ps_arm_failures;
   status.effective_rx_us = _rx_ps_eff_rx_us;
   status.effective_sleep_us = _rx_ps_eff_sleep_us;
+  status.rearm_pending = _rearm_wait;
+  status.rearm_in_s = _rearm_wait ? (uint32_t)((long)(_rearm_at - millis()) > 0 ? (_rearm_at - millis()) / 1000 : 0) : 0;
+  status.rearm_tries = _rearm_tries;
+  status.holding = _hold_applied;
   return status;
 }
 
@@ -392,6 +446,12 @@ bool RadioLibWrapper::isInRecvMode() const {
 
 int RadioLibWrapper::recvRaw(uint8_t* bytes, int sz) {
   int len = 0;
+  const uint32_t irq_us = irq_edge_us;
+  // SmartRXPS: a bare PREAMBLE_DETECTED edge only starts the stopwatch; the
+  // radio keeps receiving and RX_DONE raises a fresh edge.
+  if ((state & STATE_INT_READY) && _pre_irq_routed && consumePreambleEvent(irq_us)) {
+    return 0;
+  }
   if (state & STATE_INT_READY) {
     // PowerSaving variant
     if (isPacketReady()) {
@@ -411,6 +471,7 @@ int RadioLibWrapper::recvRaw(uint8_t* bytes, int sz) {
         } else {
         //  Serial.print("  readData() -> "); Serial.println(len);
           n_recv++;
+          if (_pre_irq_routed) measurePreamble(irq_us, len);
         }
       }
     }
@@ -461,6 +522,143 @@ void RadioLibWrapper::onSendFinished() {
   _radio->finishTransmit();
   _board->onAfterTransmit();
   state = STATE_IDLE;
+  // SmartRXPS: replies, ACKs and path returns follow our own packets; hear
+  // them on continuous RX whatever the power-saving level.
+  if (_rx_ps_enabled && _hold_s > 0) {
+    _hold_until = millis() + (uint32_t)_hold_s * 1000UL;
+    _hold_active = true;
+    _hold_count++;
+  }
+}
+
+// SmartRXPS
+bool RadioLibWrapper::holdActive() {
+  if (_hold_active && (long)(millis() - _hold_until) >= 0) _hold_active = false;
+  return _hold_active;
+}
+
+// SmartRXPS
+bool RadioLibWrapper::preambleRecentlySeen() const {
+  return _pre_valid && (uint32_t)(millis() - _pre_at_ms) < _smart_pre_busy_ms;
+}
+
+// SmartRXPS
+// Returns true when the pending IRQ was nothing but PREAMBLE_DETECTED. The flag
+// is cleared so the IRQ line drops and RX_DONE can raise a new edge.
+bool RadioLibWrapper::consumePreambleEvent(uint32_t irq_us) {
+  const uint32_t pre = _radio->getIrqMapped(1UL << RADIOLIB_IRQ_PREAMBLE_DETECTED);
+  const uint32_t end = _radio->getIrqMapped((1UL << RADIOLIB_IRQ_RX_DONE) |
+                                            (1UL << RADIOLIB_IRQ_TIMEOUT) |
+                                            (1UL << RADIOLIB_IRQ_CRC_ERR) |
+                                            (1UL << RADIOLIB_IRQ_HEADER_ERR));
+  if (pre == 0) return false;
+  uint32_t flags = _radio->getIrqFlags();
+  if (!(flags & pre) || (flags & end)) return false;
+
+  noInterrupts();
+  state &= ~STATE_INT_READY;
+  interrupts();
+  _radio->clearIrqFlags(pre);
+
+  // An end flag that landed before the clear raised no edge of its own, so
+  // hand it to the normal path now. Its timing is unknown: no measurement.
+  flags = _radio->getIrqFlags();
+  if (flags & end) {
+    noInterrupts();
+    state |= STATE_INT_READY;
+    interrupts();
+    _pre_valid = false;
+    return false;
+  }
+  _pre_us = irq_us;
+  _pre_at_ms = millis();
+  _pre_short_below = _mode_short_below;
+  _pre_valid = true;
+  return true;
+}
+
+// SmartRXPS
+void RadioLibWrapper::measurePreamble(uint32_t irq_us, int len) {
+  if (!_pre_valid || !_smart.active() || len <= 0 || _smart_symbol_us <= 0.0f) {
+    _pre_valid = false;
+    return;
+  }
+  _pre_valid = false;
+  if ((uint32_t)(millis() - _pre_at_ms) > _smart_max_pkt_ms) return;   // stale stopwatch
+
+  const uint32_t elapsed_us = irq_us - _pre_us;
+  const float our_preamble = (float)preambleLengthForSF(getSpreadingFactor());
+  const float post_us = (float)_radio->getTimeOnAir((size_t)len) - our_preamble * _smart_symbol_us;
+  const float remaining = rxPsSmartRemainingSymbols(elapsed_us, post_us, _smart_symbol_us);
+  _smart.onMeasurement(millis(), remaining, _pre_short_below);
+  MESH_DEBUG_PRINTLN("SmartRXPS: remaining=%d/10 sym below=%d/10 phase=%s", (int)(remaining * 10.0f),
+                     (int)(_pre_short_below * 10.0f), rxPsSmartPhaseName(_smart.phase()));
+  if (_smart.wantsLongProfile() != _smart_on_long) applySmartProfile(_smart.wantsLongProfile());
+}
+
+// SmartRXPS
+void RadioLibWrapper::applySmartProfile(bool long_profile) {
+  _smart_on_long = long_profile;
+  _rx_ps_rx_us = long_profile ? _smart_p32_rx : _smart_p16_rx;
+  _rx_ps_sleep_us = long_profile ? _smart_p32_sleep : _smart_p16_sleep;
+  _rx_ps_restart_pending = true;   // loop() restarts RX once the radio is idle
+}
+
+// SmartRXPS
+void RadioLibWrapper::configureSmartRxPowerSaving(bool enabled, bool smart, uint8_t level,
+                                                  uint8_t sf, float bw, uint8_t hold_s) {
+  _hold_s = enabled ? (hold_s > RX_POWERSAVING_MAX_HOLD_S ? RX_POWERSAVING_MAX_HOLD_S : hold_s) : 0;
+  if (!_hold_s) _hold_active = false;
+
+  bool ok = enabled && smart && supportsRxPowerSaving() && level >= 1 &&
+            level <= RX_POWERSAVING_GUARDED_LEVELS && sf >= 5 && sf <= 8 && bw > 0.0f;
+  const float cost = rxPowerSavingCaptureCostSymbols();
+  const uint32_t transition = rxPowerSavingTransitionUs();
+  if (ok) {
+    ok = calcRxPowerSavingLevel(level, sf, bw, 16, &_smart_p16_rx, &_smart_p16_sleep, cost, transition) &&
+         calcRxPowerSavingLevel(level, sf, bw, 32, &_smart_p32_rx, &_smart_p32_sleep, cost, transition) &&
+         isValidRxPowerSavingPeriod(_smart_p16_rx) && isValidRxPowerSavingPeriod(_smart_p16_sleep) &&
+         isValidRxPowerSavingPeriod(_smart_p32_rx) && isValidRxPowerSavingPeriod(_smart_p32_sleep);
+  }
+  if (!ok) {
+    // Manual periods, unguarded levels, SF>8 or RXPS off: stock behaviour.
+    _smart.stop();
+    _smart_on_long = false;
+    _pre_valid = false;
+    if (_pre_irq_routed) _rx_ps_restart_pending = true;   // drop the extra IRQ routing
+    return;
+  }
+
+  _smart_symbol_us = (1000.0f * (float)(1UL << sf)) / bw;
+  // A 32-symbol preamble plus sync word and header, with a little slack.
+  _smart_pre_busy_ms = (uint32_t)((32.0f + 4.25f + 8.0f + 4.0f) * _smart_symbol_us / 1000.0f) + 5;
+  _smart_max_pkt_ms = (uint32_t)(_radio->getTimeOnAir(MAX_TRANS_UNIT) / 1000) + _smart_pre_busy_ms + 100;
+  _smart.start(millis());
+  applySmartProfile(_smart.wantsLongProfile());
+}
+
+// SmartRXPS
+bool RadioLibWrapper::getSmartRxPowerSavingReport(char* reply, size_t reply_size) const {
+  if (reply == nullptr || reply_size == 0) return false;
+  const uint32_t now = millis();
+  char last_short[16];
+  if (_smart.shortSeen()) {
+    snprintf(last_short, sizeof(last_short), "%lum", (unsigned long)((now - _smart.lastShort()) / 60000UL));
+  } else {
+    strcpy(last_short, "never");
+  }
+  const int last10 = (int)(_smart.lastRemaining() * 10.0f);
+  long hold_left = _hold_active ? (long)(_hold_until - now) / 1000 : 0;
+  if (hold_left < 0) hold_left = 0;
+  snprintf(reply, reply_size,
+           "> smart=%s,in=%lum,old=%lu,new=%lu,amb=%lu,bad=%lu,last=%d.%d,oldAgo=%s,hold=%us(%ld),holds=%lu,rearm=%s,tries=%lu",
+           rxPsSmartPhaseName(_smart.phase()), (unsigned long)((now - _smart.phaseSince()) / 60000UL),
+           (unsigned long)_smart.shortCount(), (unsigned long)_smart.longCount(),
+           (unsigned long)_smart.ambiguousCount(), (unsigned long)_smart.invalidCount(),
+           last10 / 10, (last10 < 0 ? -last10 : last10) % 10, last_short,
+           (unsigned)_hold_s, hold_left, (unsigned long)_hold_count,
+           _rearm_wait ? "wait" : "no", (unsigned long)_rearm_tries);
+  return true;
 }
 
 int16_t RadioLibWrapper::performChannelScan() {

@@ -70,6 +70,11 @@ public:
   bool supportsRxPowerSaving() const override { return true; }
 
 protected:
+  // SmartRXPS
+  void setPreambleIrqRouting(bool enabled) override {
+    ((CustomLR1110 *)_radio)->routePreambleIrq = enabled;
+  }
+
   // PowerSaving variant
   int16_t startContinuousReceive() override {
     // Also covers a stopDutyCycleHardware() whose clock restore failed.

@@ -14,6 +14,9 @@ class CustomLR1110 : public LR1110 {
   bool _rx_boosted = false;
 
   public:
+    // SmartRXPS: set by the wrapper before each startReceive().
+    bool routePreambleIrq = false;
+
     CustomLR1110(Module *mod) : LR1110(mod) { }
 
     // PowerSaving variant
@@ -124,7 +127,9 @@ class CustomLR1110 : public LR1110 {
 
     int16_t startReceive() override {
       // include the PREAMBLE_DETECTED irq bit in reported flags.
-      return LR1110::startReceive(RADIOLIB_LR11X0_RX_TIMEOUT_INF, RADIOLIB_IRQ_RX_DEFAULT_FLAGS | (1UL << RADIOLIB_IRQ_PREAMBLE_DETECTED), RADIOLIB_IRQ_RX_DEFAULT_MASK, 0);
+      // SmartRXPS routes it to the IRQ pin too, to time the sender's preamble.
+      return LR1110::startReceive(RADIOLIB_LR11X0_RX_TIMEOUT_INF, RADIOLIB_IRQ_RX_DEFAULT_FLAGS | (1UL << RADIOLIB_IRQ_PREAMBLE_DETECTED),
+          RADIOLIB_IRQ_RX_DEFAULT_MASK | (routePreambleIrq ? (1UL << RADIOLIB_IRQ_PREAMBLE_DETECTED) : 0UL), 0);
     }
 
     // PowerSaving variant
