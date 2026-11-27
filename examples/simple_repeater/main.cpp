@@ -2,6 +2,9 @@
 #include <Mesh.h>
 
 #include "MyMesh.h"
+#if defined(ESP_PLATFORM) && defined(ADMIN_PASSWORD)
+  #include <helpers/FirmwareRecovery.h>
+#endif
 
 #ifdef DISPLAY_CLASS
   #include "UITask.h"
@@ -44,6 +47,10 @@ static unsigned long userBtnDownAt = 0;
 void setup() {
   Serial.begin(115200);
   delay(1000);
+
+#if defined(ESP_PLATFORM) && defined(ADMIN_PASSWORD)
+  FirmwareRecovery::begin();
+#endif
 
   board.begin();
 
@@ -141,6 +148,10 @@ void setup() {
 }
 
 void loop() {
+#if defined(ESP_PLATFORM) && defined(ADMIN_PASSWORD)
+  FirmwareRecovery::loopTick();
+#endif
+
   // Handle Serial CLI
   int len = strlen(command);
   // `command` must stay NUL-terminated within its bounds. If it ever isn't,
@@ -214,6 +225,9 @@ void loop() {
 #endif
 
   the_mesh.loop();
+#if defined(ESP_PLATFORM) && defined(ADMIN_PASSWORD)
+  FirmwareRecovery::markReady();  // idempotent: records the first completed mesh loop
+#endif
   sensors.loop();
 #ifdef DISPLAY_CLASS
   ui_task.loop();

@@ -16,6 +16,9 @@
 #include "esp_system.h"
 #include <driver/rtc_io.h>
 #include <helpers/KeyValueStore.h>
+#if defined(ADMIN_PASSWORD)
+#include <helpers/FirmwareRecovery.h>
+#endif
 
 class ESP32Board : public mesh::MainBoard {
 protected:
@@ -81,8 +84,14 @@ public:
   }
 
   void sleep(uint32_t secs) override {
+    // inhibit_sleep is held for the whole OTA upload session (set in startOTAUpdate)
+    bool otaBusy = false;
+#if defined(ADMIN_PASSWORD)
+    otaBusy = FirmwareRecovery::isStabilizing() || FirmwareRecovery::isSyncing();
+#endif
+
     // Skip if not allow to sleep
-    if (inhibit_sleep || (int32_t)(inhibit_sleep_until - millis()) > 0) {
+    if (inhibit_sleep || otaBusy || (int32_t)(inhibit_sleep_until - millis()) > 0) {
       delay(1); // Give MCU to OTA to run
       return;
     }

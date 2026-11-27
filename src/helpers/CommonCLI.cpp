@@ -4,6 +4,11 @@
 #include "AdvertDataHelpers.h"
 #include "TxtDataHelpers.h"
 #include <RTClib.h>
+#include "FirmwareRecovery.h"
+#if defined(ESP_PLATFORM)
+#include <esp_ota_ops.h>
+#include <esp_partition.h>
+#endif
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
 
@@ -884,6 +889,49 @@ void CommonCLI::handleGetCmd(uint32_t sender_timestamp, char* command, char* rep
       }
   #else
       strcpy(reply, "Error: unsupported");
+  #endif
+  #if defined(ESP_PLATFORM)
+  } else if (memcmp(config, "boot.slot", 9) == 0) {
+    const esp_partition_t* running = esp_ota_get_running_partition();
+    const esp_partition_t* boot = esp_ota_get_boot_partition();
+    const esp_partition_t* next = esp_ota_get_next_update_partition(nullptr);
+    const uint8_t app_slots = esp_ota_get_app_partition_count();
+    snprintf(reply, 160,
+             "> running: %s | boot: %s | next: %s | app slots: %u | A/B: %s | compiled in: %s",
+             running != nullptr ? running->label : "n/a",
+             boot != nullptr ? boot->label : "n/a",
+             (app_slots >= 2 && next != nullptr) ? next->label : "n/a",
+             (unsigned)app_slots,
+             app_slots >= 2 ? "yes" : "no",
+             OTA_AB_ENABLED ? "yes" : "no");
+  } else if (strcmp(config, "boot.sync") == 0) {
+    #if defined(ADMIN_PASSWORD)
+    switch (FirmwareRecovery::startSlotSync()) {
+      case FirmwareRecovery::SYNC_SKIPPED:
+        snprintf(reply, 160, "> boot.sync: skipped, slots already match");
+        break;
+      case FirmwareRecovery::SYNC_STARTED:
+        snprintf(reply, 160, "> boot.sync: copying now, console reports when copied");
+        break;
+      case FirmwareRecovery::SYNC_REFUSED_DISABLED:
+        snprintf(reply, 160, "> boot.sync: refused, A/B not compiled in");
+        break;
+      case FirmwareRecovery::SYNC_REFUSED_UNAVAILABLE:
+        snprintf(reply, 160, "> boot.sync: refused, need two OTA app slots");
+        break;
+      case FirmwareRecovery::SYNC_REFUSED_OTA:
+        snprintf(reply, 160, "> boot.sync: refused, OTA upload in progress or recovery pending");
+        break;
+      case FirmwareRecovery::SYNC_REFUSED_BUSY:
+        snprintf(reply, 160, "> boot.sync: refused, recovery task running");
+        break;
+      default:
+        snprintf(reply, 160, "> boot.sync: failed");
+        break;
+    }
+    #else
+    strcpy(reply, "Error: unsupported");
+    #endif
   #endif
   } else if (memcmp(config, "adc.multiplier", 14) == 0) {
     float adc_mult = _board->getAdcMultiplier();
