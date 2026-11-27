@@ -71,6 +71,10 @@ void initVariant()
   pinMode(EEPROM_POWER, OUTPUT);
   digitalWrite(EEPROM_POWER, HIGH);
 
+  // PowerSaving variant: Power the AHT20
+  pinMode(AHT_POWER, OUTPUT);  
+  digitalWrite(AHT_POWER, HIGH);
+
   pinMode(36, OUTPUT);
   digitalWrite(36, HIGH);
   pinMode(34, OUTPUT);

@@ -49,5 +49,8 @@ public:
     digitalWrite(PIN_LED_BLUE, !LED_STATE_ON);
     digitalWrite(PIN_LED_GREEN, !LED_STATE_ON);
     digitalWrite(PIN_LED_RED, !LED_STATE_ON);
+
+    // PowerSaving variant
+    digitalWrite(AHT_POWER, LOW);
   }
 };
