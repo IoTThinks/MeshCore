@@ -25,7 +25,14 @@ AutoDiscoverRTCClock rtc_clock(fallback_clock);
 
 bool radio_init() {
   rtc_clock.begin(Wire);
-  
+
+  // PowerSaving variant
+  // Support Washtastic boards
+#ifdef P_LORA_EN
+  pinMode(P_LORA_EN, OUTPUT);
+  digitalWrite(P_LORA_EN, HIGH);
+#endif
+
   return radio.std_init(&SPI);
 }
 
