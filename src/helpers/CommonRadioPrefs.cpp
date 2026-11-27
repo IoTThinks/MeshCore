@@ -56,6 +56,22 @@ bool CommonRadioPrefs::setByKey(const char* key, const char* value) {
   return false;
 }
 
+bool FemRxpsRadioPrefs::getByKey(const char* key, char* value, size_t max_len) {
+  if (strcmp(key, "fem_rxps") == 0) {
+    snprintf(value, max_len, "%u", static_cast<unsigned>(getFEMRxps()));
+    return true;
+  }
+  return CommonRadioPrefs::getByKey(key, value, max_len);
+}
+
+bool FemRxpsRadioPrefs::setByKey(const char* key, const char* value) {
+  if (strcmp(key, "fem_rxps") == 0) {
+    setFEMRxps(atoi(value) ? 1 : 0);
+    return true;
+  }
+  return CommonRadioPrefs::setByKey(key, value);
+}
+
 bool CommonRadioPrefs::handleCommand(const char* command, uint32_t sender_timestamp, char* reply) {
   // PowerSaving variant
   if (strncmp(command, "get radio.rxps", 14) == 0 &&

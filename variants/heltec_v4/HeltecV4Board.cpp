@@ -7,6 +7,7 @@ void HeltecV4Board::begin() {
     pinMode(PIN_ADC_CTRL, OUTPUT);
     digitalWrite(PIN_ADC_CTRL, LOW); // Initially inactive
 
+    fem_rxps_gate.begin();
     loRaFEMControl.init();
 
     periph_power.begin();
@@ -84,9 +85,22 @@ void HeltecV4Board::attachDynamicPrefs(KeyValueStore* prefs) {
   _prefs->getByKey("fem_rxgain", radio_fem_rxgain, 7);  // get initial values
 
   setLoRaFemLnaEnabled(strcmp(radio_fem_rxgain, "1") == 0);
+  fem_rxps_gate.attachPrefs(prefs);
+
+}
+
+void HeltecV4Board::onBeforeLightSleep() {
+  fem_rxps_gate.beforeSleep(loRaFEMControl.isLnaCanControl(), isLoRaFemLnaEnabled());
+}
+
+void HeltecV4Board::onAfterLightSleep(bool slept) {
+  fem_rxps_gate.afterSleep(slept);
 }
 
 bool HeltecV4Board::handleCommand(const char* command, uint32_t sender_timestamp, char* reply) {
+  if (fem_rxps_gate.handleCommand(command, reply, loRaFEMControl.isLnaCanControl(), isLoRaFemLnaEnabled())) {
+    return true;
+  }
   if (strcmp(command, "get radio.fem.rxgain") == 0) {
     if (!loRaFEMControl.isLnaCanControl()) {
       strcpy(reply, "Error: unsupported");

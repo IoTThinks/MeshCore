@@ -294,6 +294,15 @@ This document provides an overview of CLI commands that can be sent to MeshCore 
 
 ---
 
+#### View or change LoRa FEM LNA gating during RX power saving
+
+- `get radio.fem.rxps` reports the setting, any inactive reason, and the number of successful light sleeps in which the ULP drove the LNA bypass pin.
+- `set radio.fem.rxps on|off` saves the setting. The default is `on`.
+- Supported in room server and non-bridge repeater builds for Heltec V4.3, V4.3 R8, and Wireless Tracker V2. Companion and bridge builds return `Error: unsupported` on these boards.
+- Gating requires the external LNA enabled, radio RX power saving armed, and MCU power saving enabled after the startup delay. The counter resets at boot.
+
+---
+
 #### View or change the LoRa FEM transmit-path gain state on supported boards
 **Usage:**
 - `get radio.fem.txgain`

@@ -77,3 +77,13 @@ public:
   bool setByKey(const char* key, const char* value) override;   // for dynamic key/value access
   bool getByKey(const char* key, char* value, size_t max_len) override;
 };
+
+class FemRxpsRadioPrefs : public CommonRadioPrefs {
+protected:
+  virtual uint8_t getFEMRxps() const = 0;
+  virtual void setFEMRxps(uint8_t on) = 0;
+
+public:
+  bool getByKey(const char* key, char* value, size_t max_len) override;
+  bool setByKey(const char* key, const char* value) override;
+};

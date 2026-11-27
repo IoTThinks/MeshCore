@@ -72,6 +72,7 @@ public:
   RxPowerSavingConfig rxps;
   uint8_t radio_fem_rxgain = 0; // LoRa FEM RX gain setting
   uint8_t radio_fem_txgain = 0; // LoRa FEM TX gain setting
+  uint8_t radio_fem_rxps = 1; // PowerSaving variant
   uint8_t path_hash_mode = 0;   // which path mode to use when sending
   uint8_t loop_detect = 0;
   uint8_t cad_enabled = 0;      // hardware Channel Activity Detection before TX (boolean)
@@ -81,7 +82,7 @@ public:
   uint16_t batt_fwd_resume_mv = 0;   // resume forwarding when battery reaches this again
 
 private:
-  class RadioPrefs : public CommonRadioPrefs {
+  class RadioPrefs : public FemRxpsRadioPrefs {
     NodePrefs* _parent;
   protected:
     void structure() override {
@@ -94,6 +95,7 @@ private:
       def("rxgain", _parent->rx_boosted_gain);
       def("fem_rxgain", _parent->radio_fem_rxgain);
       def("fem_txgain", _parent->radio_fem_txgain);
+      def("fem_rxps", _parent->radio_fem_rxps);
       def("tx", _parent->tx_power_dbm);
       def("af", _parent->airtime_factor);
       def("rxdelay", _parent->rx_delay_base);
@@ -111,6 +113,13 @@ private:
     }
   public:
     RadioPrefs(NodePrefs* parent) : _parent(parent) { }
+    bool getByKey(const char* key, char* value, size_t max_len) override {
+      if (strcmp(key, "pwr_sav_en") == 0) {
+        snprintf(value, max_len, "%u", _parent->powersaving_enabled ? 1u : 0u);
+        return true;
+      }
+      return FemRxpsRadioPrefs::getByKey(key, value, max_len);
+    }
     // PowerSaving variant
     RxPowerSavingConfig* getRxPowerSavingConfig() override { return &_parent->rxps; }
     // CommonRadioPrefs interface
@@ -148,6 +157,8 @@ private:
     void setFEMRxGain(uint8_t g) override { _parent->radio_fem_rxgain = g; markDirty(); }
     uint8_t getFEMTxGain() const override { return _parent->radio_fem_txgain; }
     void setFEMTxGain(uint8_t g) override { _parent->radio_fem_txgain = g; markDirty(); }
+    uint8_t getFEMRxps() const override { return _parent->radio_fem_rxps; }
+    void setFEMRxps(uint8_t on) override { _parent->radio_fem_rxps = on; markDirty(); }
   };
   RadioPrefs radio;
 

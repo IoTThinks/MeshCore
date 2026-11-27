@@ -4,6 +4,7 @@
 #include <driver/rtc_io.h>
 #include <helpers/ESP32Board.h>
 #include <helpers/RefCountedDigitalPin.h>
+#include <helpers/esp32/FemRxpsGate.h>
 #include "LoRaFEMControl.h"
 
 #ifndef ADC_MULTIPLIER
@@ -12,6 +13,7 @@
 
 class HeltecV4R8Board : public ESP32Board {
   KeyValueStore* _prefs = NULL;
+  FemRxpsGate fem_rxps_gate{P_LORA_BUSY, P_LORA_KCT8103L_PA_CTX};
 
   bool setLoRaFemLnaEnabled(bool enable);
   bool isLoRaFemLnaEnabled() const;
@@ -28,6 +30,10 @@ public:
   void attachDynamicPrefs(KeyValueStore* prefs);
   bool handleCommand(const char* command, uint32_t sender_timestamp, char* reply) override;
 
+  FemRxpsGate& femRxpsGate() { return fem_rxps_gate; }
+
+  void onBeforeLightSleep() override;
+  void onAfterLightSleep(bool slept) override;
   void onBeforeTransmit(void) override;
   void onAfterTransmit(void) override;
   void shutdownPeripherals() override;
