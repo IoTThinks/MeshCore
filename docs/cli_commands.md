@@ -87,6 +87,41 @@ This document provides an overview of CLI commands that can be sent to MeshCore 
 **Usage:**
 - `start ota`
 
+**Note:** On repeaters built with `-D OTA_AB_ENABLED=1` and a partition table that has two OTA app slots, the update is written to the inactive slot and the device switches to it after the transfer completes. Builds without that flag use the stock Arduino-ESP32 `Update` path, which is still dual-slot aware when the table has two app slots: it writes the inactive slot and switches the boot partition, it does not overwrite the running image. What `-D OTA_AB_ENABLED=1` adds on top is a health gate after the switch, rollback to the previous slot if the new image fails, and an explicit slot sync command. A table with only one app slot has no partition for `Update` to write, so `start ota` fails on such a build; getting a second slot requires a full reflash (merged image over USB/serial).
+
+---
+
+### Show the boot slot and A/B status
+**Usage:**
+- `get boot.slot`
+
+**ESP32 only:** other targets answer `??: boot.slot`.
+
+**Note:** Reports the slot labels read from the running image and from otadata at the moment the command runs, so the values are never cached:
+
+- `running`: partition label of the executing image
+- `boot`: partition label the bootloader will start next (from `esp_ota_get_boot_partition`)
+- `next`: partition label the next `start ota` would write to (from `esp_ota_get_next_update_partition`), or `n/a`
+- `app slots`: number of OTA app partitions in the flashed table (`esp_ota_get_app_partition_count`)
+- `A/B`: `yes` when `app slots` is 2 or more, `no` otherwise
+- `compiled in`: `yes` when the environment was built with `-D OTA_AB_ENABLED=1`, `no` otherwise
+
+A/B capability is decided by the partition subtype count, not by the label text: tables that name their slots `app0`/`app1` are just as valid as `ota_0`/`ota_1`.
+
+**Note:** `A/B: no` with `app slots: 1` means the flashed partition table has no second app slot, so `start ota` cannot run at all; gaining a second slot requires a full reflash (merged image over USB/serial), not an OTA. `app slots: 2` with `compiled in: no` means the table is ready and the stock `Update` path writes the inactive slot and switches boot; what the firmware lacks is the A/B extras (health gate, rollback, slot sync), not the ability to update OTA.
+
+---
+
+### Copy the running image to the inactive slot
+**Usage:**
+- `get boot.sync`
+
+**ESP32 only, A/B builds only:** other targets answer `??: boot.sync`. A build without `-D OTA_AB_ENABLED=1`, or a table with fewer than two OTA app slots, answers `> boot.sync: refused, ...` and copies nothing.
+
+**Note:** This is the only command that writes the inactive slot outside an OTA upload. It copies the running image over the inactive slot, so the previous firmware, and with it the rollback target, is destroyed; nothing does this automatically after an OTA or after a health pass. The command refuses while an OTA upload session is open, while a slot sync or post-OTA health check is already running, and when the build or partition table cannot do A/B.
+
+**Note:** When both slots already hold the same image, and the inactive image verifies, the reply is `> boot.sync: skipped, slots already match` and nothing is written. Otherwise the copy runs in the background and the reply is `> boot.sync: copying now, console reports when copied`; the USB console prints progress and ends with `Sync complete (copied)` or an error line. A full slot copy takes minutes and sleep is blocked for its duration. If the device reboots mid-copy the running slot and the boot selection are unchanged, but the inactive slot may be partially written; the next `get boot.sync` verifies that image and copies again when it is incomplete.
+
 ---
 
 ### Erase/Factory Reset

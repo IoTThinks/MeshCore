@@ -8,12 +8,31 @@
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <AsyncElegantOTA.h>
+#include <helpers/FirmwareRecovery.h>
 
 #include <SPIFFS.h>
 
 bool ESP32Board::startOTAUpdate(const char* id, char reply[]) {
   inhibit_sleep = true;   // prevent sleep during OTA
   WiFi.softAP("MeshCore-OTA", NULL);
+
+  // A/B builds only: mark the pending upload before the POST handler runs (user-approved timing).
+  char mode[72];
+#if defined(OTA_AB_ENABLED) && OTA_AB_ENABLED   // same gate as FirmwareRecovery::isABEnabled()
+  FirmwareRecovery::markOTAPending();
+  if (FirmwareRecovery::isABAvailable()) {
+    snprintf(mode, sizeof(mode), "startOTAUpdate: A/B OTA (writes inactive slot)");
+  } else {
+    snprintf(mode, sizeof(mode), "startOTAUpdate: A/B compiled, no inactive slot: upload refused");
+  }
+#else
+  if (FirmwareRecovery::isABAvailable()) {
+    snprintf(mode, sizeof(mode), "startOTAUpdate: stock Update (writes inactive slot)");
+  } else {
+    snprintf(mode, sizeof(mode), "startOTAUpdate: stock Update (single app slot)");
+  }
+#endif
+  Serial.println(mode);
 
   sprintf(reply, "Started: http://%s/update", WiFi.softAPIP().toString().c_str());
   MESH_DEBUG_PRINTLN("startOTAUpdate: %s", reply);
