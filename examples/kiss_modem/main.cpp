@@ -1,3 +1,4 @@
+#include "helpers/PowerSaving.h"
 #include <Arduino.h>
 #include <target.h>
 #include <helpers/ArduinoHelpers.h>
@@ -130,6 +131,9 @@ void setup() {
 }
 
 void loop() {
+#if defined(ESP32_PLATFORM)
+  PowerSaving::updateCpuClock(true);
+#endif
   modem->loop();
 
   if (!modem->isActuallyTransmitting() && !modem->isHostOutputBackedUp()) {
@@ -156,4 +160,7 @@ void loop() {
     next_noise_floor_calib_ms = millis();
   }
   radio_driver.loop();
+#if defined(ESP32_PLATFORM)
+  if (!modem->isTxBusy() && !modem->isHostOutputBackedUp()) delay(1);
+#endif
 }

@@ -1,3 +1,4 @@
+#include "helpers/PowerSaving.h"
 #include <Arduino.h>   // needed for PlatformIO
 #include <Mesh.h>
 
@@ -141,6 +142,9 @@ void setup() {
 }
 
 void loop() {
+#if defined(ESP32_PLATFORM)
+  PowerSaving::updateCpuClock(the_mesh.getNodePrefs()->powersaving_enabled);
+#endif
   // Handle Serial CLI
   int len = strlen(command);
   // `command` must stay NUL-terminated within its bounds. If it ever isn't,

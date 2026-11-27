@@ -12,6 +12,10 @@
 #include <SPIFFS.h>
 
 bool ESP32Board::startOTAUpdate(const char* id, char reply[]) {
+  if (!PowerSaving::prepareWifi()) {
+    strcpy(reply, "Error: Could not restore the Wi-Fi clock");
+    return false;
+  }
   inhibit_sleep = true;   // prevent sleep during OTA
   WiFi.softAP("MeshCore-OTA", NULL);
 
