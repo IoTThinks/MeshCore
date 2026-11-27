@@ -40,6 +40,7 @@
 #define ADC_MAX                 (4096)
 
 #define EEPROM_POWER            (7)
+#define AHT_POWER               (3)             // PowerSaving variant: P0.03, AHT20 sensor power
 #define BAT_POWER               (17)
 #define PIN_PWR_EN              (16)
 
